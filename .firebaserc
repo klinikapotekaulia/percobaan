@@ -5,8 +5,8 @@
   "targets": {
     "klinikapotekaulia-61641": {
       "hosting": {
-        "percobaan": [
-          "percobaan"
+        "aulia-testing": [
+          "aulia-testing"
         ]
       }
     }

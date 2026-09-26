@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "target": "percobaan",
+    "target": "aulia-testing",
     "public": ".",
     "ignore": [
       "firebase.json",

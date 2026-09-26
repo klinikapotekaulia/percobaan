@@ -118,7 +118,7 @@ window.AppManajemenKaryawan = {
         html += '<div id="employee-qrcode" class="mx-auto w-[320px] h-[320px] flex items-center justify-center bg-white p-3 rounded-xl border border-slate-200"></div>';
         html += '<p class="text-[11px] text-slate-400 mt-3">Simpan/cetak gambar QR ini untuk dipindai Admin saat absensi.</p>';
         html += '<div class="flex justify-center gap-2 mt-4">';
-        html += '<button onclick="AppManajemenKaryawan.downloadQr('' + id + '', '' + namaFile + '')" class="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-semibold flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i> Download PNG</button>';
+        html += '<button onclick="AppManajemenKaryawan.downloadQr(\'' + id + '\', \'' + namaFile + '\')" class="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-semibold flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i> Download PNG</button>';
         html += '<button onclick="Utils.closeModal()" class="px-4 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-semibold">Tutup</button>';
         html += '</div></div>';
 

@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Display Antrian - Aulia Apotek & Klinik</title>
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* ============================================================
+     TEMA (Malam/Terang) — semua warna lewat CSS variable supaya
+     bisa ditukar langsung dengan atribut data-theme di <html>,
+     tanpa reload halaman. Default: Malam (night), sama seperti
+     tampilan sebelumnya.
+     ============================================================ */
+  :root, html[data-theme="night"] {
+    --bg-grad:
+      radial-gradient(circle at 10% 20%, rgba(16,185,129,0.22), transparent 45%),
+      radial-gradient(circle at 90% 80%, rgba(4,120,87,0.16), transparent 45%),
+      radial-gradient(circle at 50% 50%, rgba(20,184,166,0.10), transparent 40%),
+      linear-gradient(135deg, #021a14 0%, #063c2e 45%, #01130e 100%);
+    --text-main: #f1f5f9;
+    --text-sub: #a7f3d0;
+    --text-faint: #64748b;
+    --header-bg: rgba(255,255,255,0.02);
+    --header-border: rgba(255,255,255,0.07);
+    --brand-sub: #34d399;
+    --panel-current-bg: linear-gradient(155deg, rgba(4,120,87,0.28), rgba(15,23,42,0.65));
+    --panel-current-border: rgba(52,211,153,0.38);
+    --panel-current-shadow: 0 30px 70px -25px rgba(5,150,105,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
+    --panel-next-bg: rgba(255,255,255,0.025);
+    --panel-next-border: rgba(255,255,255,0.08);
+    --tag-current-bg: rgba(52,211,153,0.16); --tag-current-color: #34d399; --tag-current-border: rgba(52,211,153,0.35);
+    --tag-next-bg: rgba(148,163,184,0.14); --tag-next-color: #cbd5e1; --tag-next-border: rgba(203,213,225,0.2);
+    --number-grad: linear-gradient(180deg, #ffffff 0%, #a7f3d0 55%, #10b981 100%);
+    --empty-color: rgba(241,245,249,0.35);
+    --empty-color-2: rgba(241,245,249,0.3);
+    --footer-bg: rgba(255,255,255,0.02);
+    --footer-border: rgba(255,255,255,0.07);
+    --riwayat-bg: rgba(255,255,255,0.035);
+    --riwayat-border: rgba(255,255,255,0.07);
+    --riwayat-no: #a7f3d0;
+    --riwayat-nm: #64748b;
+    --ticker-bg: rgba(255,255,255,0.03);
+    --ticker-border: rgba(255,255,255,0.08);
+    --ticker-label-bg: linear-gradient(135deg, #10b981, #059669);
+    --ticker-label-color: #ffffff;
+    --ticker-text-color: #e2e8f0;
+    --ctrl-bg: rgba(255,255,255,0.06);
+    --ctrl-border: rgba(255,255,255,0.14);
+    --ctrl-color: #e2e8f0;
+    --pulse-glow: rgba(52,211,153,0.35);
+  }
+  html[data-theme="light"] {
+    --bg-grad:
+      radial-gradient(circle at 10% 20%, rgba(16,185,129,0.15), transparent 45%),
+      radial-gradient(circle at 90% 80%, rgba(5,150,105,0.10), transparent 45%),
+      linear-gradient(135deg, #f0fdf4 0%, #d1fae5 50%, #ecfdf5 100%);
+    --text-main: #062f1e;
+    --text-sub: #15803d;
+    --text-faint: #64748b;
+    --header-bg: rgba(255,255,255,0.75);
+    --header-border: rgba(6,47,30,0.08);
+    --brand-sub: #059669;
+    --panel-current-bg: linear-gradient(155deg, rgba(16,185,129,0.12), rgba(255,255,255,0.95));
+    --panel-current-border: rgba(16,185,129,0.35);
+    --panel-current-shadow: 0 30px 70px -25px rgba(5,150,105,0.22), inset 0 1px 0 rgba(255,255,255,0.8);
+    --panel-next-bg: rgba(255,255,255,0.75);
+    --panel-next-border: rgba(6,47,30,0.08);
+    --tag-current-bg: rgba(16,185,129,0.12); --tag-current-color: #047857; --tag-current-border: rgba(4,120,87,0.25);
+    --tag-next-bg: rgba(100,116,139,0.12); --tag-next-color: #334155; --tag-next-border: rgba(51,65,85,0.18);
+    --number-grad: linear-gradient(180deg, #062f1e 0%, #047857 55%, #10b981 100%);
+    --empty-color: rgba(6,47,30,0.35);
+    --empty-color-2: rgba(6,47,30,0.3);
+    --footer-bg: rgba(255,255,255,0.65);
+    --footer-border: rgba(6,47,30,0.08);
+    --riwayat-bg: rgba(255,255,255,0.8);
+    --riwayat-border: rgba(6,47,30,0.08);
+    --riwayat-no: #15803d;
+    --riwayat-nm: #64748b;
+    --ticker-bg: rgba(255,255,255,0.8);
+    --ticker-border: rgba(6,47,30,0.08);
+    --ticker-label-bg: linear-gradient(135deg, #10b981, #059669);
+    --ticker-label-color: #ffffff;
+    --ticker-text-color: #062f1e;
+    --ctrl-bg: rgba(6,47,30,0.06);
+    --ctrl-border: rgba(6,47,30,0.14);
+    --ctrl-color: #062f1e;
+    --pulse-glow: rgba(16,185,129,0.25);
+  }
+
+  html, body {
+    height: 100%;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg-grad);
+    background-size: 200% 200%;
+    animation: gradientFlow 25s ease infinite;
+    color: var(--text-main);
+    overflow: hidden;
+    position: relative;
+    transition: background 0.4s ease, color 0.4s ease;
+  }
+
+  @keyframes gradientFlow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Decorative floating glow bubbles in the background to make it look alive */
+  .bg-glow {
+    position: absolute; width: min(40vw, 450px); height: min(40vw, 450px);
+    border-radius: 50%; filter: blur(120px); opacity: 0.16;
+    pointer-events: none; z-index: 0; transition: all 1s ease;
+  }
+  html[data-theme="light"] .bg-glow { opacity: 0.08; }
+  .bg-glow-1 {
+    background: #10b981; top: -10%; left: -5%;
+    animation: floatGlow1 28s ease-in-out infinite alternate;
+  }
+  .bg-glow-2 {
+    background: #047857; bottom: -10%; right: -5%;
+    animation: floatGlow2 32s ease-in-out infinite alternate;
+  }
+  @keyframes floatGlow1 {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(120px, 80px) scale(1.15); }
+  }
+  @keyframes floatGlow2 {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-100px, -90px) scale(1.12); }
+  }
+
+  .wrap { height: 100vh; display: grid; grid-template-rows: auto 1fr auto auto; position: relative; z-index: 1; }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 48px; background: var(--header-bg);
+    border-bottom: 1px solid var(--header-border);
+  }
+  .brand { display: flex; align-items: center; gap: 18px; }
+  .brand img { width: 54px; height: 54px; border-radius: 14px; background: #fff; padding: 5px; box-shadow: 0 4px 18px rgba(0,0,0,0.25); object-fit: contain; }
+  .brand h1 { font-size: 21px; font-weight: 800; letter-spacing: 0.2px; }
+  .brand p { font-size: 12.5px; color: var(--brand-sub); font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+  .head-right { display: flex; align-items: center; gap: 20px; }
+  .live { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; color: #4ade80; text-transform: uppercase; }
+  .live .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 0 rgba(74,222,128,0.6); animation: pulseDot 1.8s infinite; }
+  @keyframes pulseDot { 0% { box-shadow: 0 0 0 0 rgba(74,222,128,0.55); } 70% { box-shadow: 0 0 0 9px rgba(74,222,128,0); } 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); } }
+  .live.off .dot { background: #f87171; animation: none; }
+  .live.off { color: #f87171; }
+
+  #clock { text-align: right; }
+  #jam { font-size: 25px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.5px; }
+  #tanggal { font-size: 12.5px; color: var(--text-sub); margin-top: 2px; text-transform: capitalize; }
+
+  .ctrl-btn {
+    background: var(--ctrl-bg); border: 1px solid var(--ctrl-border); color: var(--ctrl-color);
+    width: 40px; height: 40px; border-radius: 10px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 17px;
+    transition: background 0.2s ease;
+  }
+  .ctrl-btn:hover { background: var(--ctrl-border); }
+
+  /* ---------- Main: panels ---------- */
+  main {
+    display: grid; grid-template-columns: 1fr; gap: 28px;
+    padding: 34px 48px; min-height: 0; transition: all 0.3s ease;
+  }
+  main.with-video {
+    grid-template-columns: 1fr 1.35fr;
+  }
+
+  .panel {
+    border-radius: 26px; padding: 34px 40px; display: flex; flex-direction: column;
+    position: relative; overflow: hidden; min-height: 0;
+  }
+  .panel-current {
+    background: var(--panel-current-bg);
+    border: 1px solid var(--panel-current-border);
+    box-shadow: var(--panel-current-shadow);
+    align-items: center; justify-content: center; text-align: center;
+  }
+  .panel-current::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 0%, var(--pulse-glow), transparent 60%);
+    pointer-events: none;
+  }
+  .panel-next {
+    background: var(--panel-next-bg);
+    border: 1px solid var(--panel-next-border);
+    align-items: center; justify-content: center; text-align: center;
+  }
+  .panel-video {
+    background: var(--panel-next-bg);
+    border: 1px solid var(--panel-next-border);
+    padding: 12px;
+    display: none;
+    align-items: center; justify-content: center;
+  }
+  .panel-video.active { display: flex; }
+  .panel-video iframe {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 16 / 9;
+    max-width: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+  }
+
+  .tag {
+    font-size: 13px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+    padding: 7px 18px; border-radius: 999px; margin-bottom: 22px;
+  }
+  .tag-current { background: var(--tag-current-bg); color: var(--tag-current-color); border: 1px solid var(--tag-current-border); }
+  .tag-next { background: var(--tag-next-bg); color: var(--tag-next-color); border: 1px solid var(--tag-next-border); }
+
+  #nomorCurrent {
+    font-size: min(24vw, 280px); font-weight: 900; line-height: 0.95; letter-spacing: -2px;
+    background: var(--number-grad);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 10px 50px var(--pulse-glow);
+    position: relative; z-index: 1;
+    transition: font-size 0.3s ease;
+  }
+  #namaCurrent { font-size: 48px; font-weight: 700; margin-top: 18px; position: relative; z-index: 1; transition: font-size 0.3s ease; }
+  #dokterCurrent {
+    font-size: 24px; font-weight: 600; color: var(--brand-sub); margin-top: 14px;
+    display: inline-flex; align-items: center; gap: 8px; position: relative; z-index: 1;
+    transition: font-size 0.3s ease;
+  }
+  #dokterCurrent svg { width: 18px; height: 18px; }
+  .empty-current { font-size: 28px; color: var(--empty-color); font-weight: 500; }
+
+  #nomorNext {
+    font-size: min(9vw, 96px); font-weight: 800; line-height: 1;
+    color: var(--text-main);
+    transition: font-size 0.3s ease;
+  }
+  #dokterNext {
+    font-size: 16px; font-weight: 600; color: var(--text-sub); margin-top: 14px;
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: font-size 0.3s ease;
+  }
+  #dokterNext svg { width: 15px; height: 15px; }
+  .empty-next { font-size: 17px; color: var(--empty-color-2); font-weight: 500; }
+
+  /* Font size optimization when video is active to fit column */
+  main.with-video #nomorCurrent {
+    font-size: min(15vw, 170px);
+  }
+  main.with-video #namaCurrent {
+    font-size: 28px;
+    margin-top: 10px;
+  }
+  main.with-video #dokterCurrent {
+    font-size: 18px;
+    margin-top: 8px;
+  }
+
+  @keyframes popIn {
+    0% { transform: scale(0.82); opacity: 0; }
+    55% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .flash-in { animation: popIn 0.55s cubic-bezier(0.2,0.8,0.2,1); }
+
+  @keyframes ringPulse {
+    0% { box-shadow: var(--panel-current-shadow), 0 0 0 0 var(--pulse-glow); }
+    50% { box-shadow: var(--panel-current-shadow), 0 0 0 14px rgba(16,185,129,0); }
+    100% { box-shadow: var(--panel-current-shadow), 0 0 0 0 rgba(16,185,129,0); }
+  }
+  .panel-current.ring-flash { animation: ringPulse 1.4s ease-out; }
+
+  /* ---------- Footer: history strip ---------- */
+  footer {
+    background: var(--footer-bg); border-top: 1px solid var(--footer-border);
+    padding: 18px 48px 22px;
+  }
+  footer .ft-label {
+    font-size: 11.5px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint);
+    margin-bottom: 12px; font-weight: 700;
+  }
+  .riwayat { display: flex; gap: 14px; flex-wrap: wrap; }
+  .riwayat .item {
+    background: var(--riwayat-bg); border: 1px solid var(--riwayat-border);
+    border-radius: 14px; padding: 12px 20px; min-width: 130px;
+  }
+  .riwayat .item .no { font-size: 21px; font-weight: 800; color: var(--riwayat-no); letter-spacing: -0.5px; }
+  .riwayat .item .nm { font-size: 12.5px; color: var(--riwayat-nm); margin-top: 3px; font-weight: 500; }
+  .riwayat .empty { font-size: 13px; color: var(--text-faint); padding: 10px 0; }
+
+  /* ---------- Running text ticker (berita berjalan) ---------- */
+  .ticker-bar {
+    display: flex; align-items: stretch; height: 52px;
+    background: var(--ticker-bg); border-top: 1px solid var(--ticker-border);
+    overflow: hidden;
+  }
+  .ticker-label {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    padding: 0 26px; background: var(--ticker-label-bg); color: var(--ticker-label-color);
+    font-size: 13.5px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .ticker-track { flex: 1; overflow: hidden; position: relative; display: flex; align-items: center; }
+  .ticker-text {
+    display: inline-block; white-space: nowrap; padding-left: 100%;
+    font-size: 17.5px; font-weight: 600; color: var(--ticker-text-color);
+    animation: tickerScroll linear infinite;
+  }
+  @keyframes tickerScroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+  }
+
+  #soundBtn {
+    position: fixed; top: 22px; right: 48px; z-index: 20;
+    background: rgba(56,189,248,0.14); border: 1px solid rgba(125,211,252,0.4);
+    color: #7dd3fc; padding: 9px 18px; border-radius: 10px; font-size: 13px; font-weight: 700;
+    cursor: pointer; display: none; letter-spacing: 0.3px;
+  }
+
+  @media (max-width: 900px) {
+    main, main.with-video { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-glow bg-glow-1"></div>
+<div class="bg-glow bg-glow-2"></div>
+<div class="wrap">
+  <button id="soundBtn" onclick="aktifkanSuara()">🔊 Aktifkan Suara</button>
+
+  <header>
+    <div class="brand">
+      <img id="brandLogo" src="logostruk.png" alt="Aulia" onerror="this.style.display='none'">
+      <div>
+        <h1>Aulia Apotek &amp; Klinik</h1>
+        <p id="displayTitle">Display Panggilan Antrian</p>
+      </div>
+    </div>
+    <div class="head-right">
+      <div class="live" id="liveStatus"><span class="dot"></span>Live</div>
+      <div id="clock">
+        <div id="jam">--:--:--</div>
+        <div id="tanggal">-</div>
+      </div>
+      <button class="ctrl-btn" id="themeBtn" onclick="toggleTheme()" title="Ganti Tema Terang/Malam">🌙</button>
+      <button class="ctrl-btn" id="fsBtn" onclick="toggleFullscreen()" title="Layar Penuh">⛶</button>
+    </div>
+  </header>
+
+  <main id="mainGrid">
+    <section class="panel panel-current" id="panelCurrent">
+      <span class="tag tag-current" id="tagCurrent">Sedang Dilayani</span>
+      <div id="areaCurrent">
+        <div class="empty-current">Menunggu panggilan pertama…</div>
+      </div>
+    </section>
+
+    <section class="panel panel-video" id="panelVideo">
+      <iframe id="videoFrame" src="" title="Video" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+    </section>
+  </main>
+
+  <footer>
+    <div class="ft-label" id="ftLabel">Riwayat Panggilan</div>
+    <div class="riwayat" id="riwayat"><span class="empty">Belum ada panggilan</span></div>
+  </footer>
+
+  <div class="ticker-bar">
+    <div class="ticker-label" id="tickerLabel">INFO</div>
+    <div class="ticker-track"><div class="ticker-text" id="tickerText">Memuat pengumuman…</div></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script>
+// ============================================================
+// Halaman ini BERDIRI SENDIRI (bukan bagian dari SPA index.html),
+// dibuat untuk dibuka di TV / monitor ruang tunggu tanpa perlu login.
+//
+// Membaca 2 dokumen Firestore secara real-time:
+//   1. 'pengaturan/antrianDisplay'          → data ANTRIAN (current/next/riwayat),
+//      ditulis oleh js/klinik/antrian.js.
+//   2. 'pengaturan/antrianDisplaySettings'   → PENGATURAN TAMPILAN (logo, running
+//      text, link YouTube, tema default), ditulis oleh js/pengaturan/displayAntrian.js.
+//
+// FITUR:
+//   - Tema Terang/Malam (tombol 🌙, tersimpan per-perangkat di localStorage)
+//   - Tombol Layar Penuh (Fullscreen API)
+//   - Running text (berita berjalan) dgn label kolom ikonik, keduanya editable
+//     dari menu Pengaturan > Display Antrian di aplikasi utama
+//   - Logo bisa diganti lewat menu yang sama (disimpan sebagai base64)
+//   - Panel Video YouTube (link editable), otomatis muncul/hilang sesuai pengaturan
+//   - "Reset tengah malam": begitu tanggal berganti, data panggilan hari
+//     sebelumnya otomatis dianggap basi & tampilan kembali ke kondisi kosong,
+//     TANPA perlu Cloud Function/cron terpisah (lihat isDataBasi() & renderFromData()).
+//
+// Firestore Rules mengizinkan READ PUBLIK khusus kedua dokumen ini.
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDXuiTRwHttekv5iy6rk8RJA_pVL25v-U4",
+  authDomain: "klinikapotekaulia-61641.firebaseapp.com",
+  projectId: "klinikapotekaulia-61641",
+  storageBucket: "klinikapotekaulia-61641.firebasestorage.app",
+  messagingSenderId: "857781555251",
+  appId: "1:857781555251:web:33dbb41f292026f9ef9346"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Konfigurasi cache size menjadi tidak terbatas (unlimited)
+// agar data antrian tersimpan lokal dan sinkronisasi otomatis ketika koneksi pulih.
+try {
+  db.settings({
+    cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
+  });
+} catch (e) {
+  console.warn('Gagal mengatur cacheSizeBytes (Display):', e.message);
+}
+
+// Aktifkan persistence di tab display antrian
+db.enablePersistence({ synchronizeTabs: true }).catch(function (err) {
+  if (err.code === 'failed-precondition') {
+    console.warn('Firestore persistence (Display): hanya bisa aktif di satu tab pada satu waktu.');
+  } else if (err.code === 'unimplemented') {
+    console.warn('Firestore persistence (Display): browser ini tidak mendukung fitur cache offline.');
+  }
+});
+
+let lastNomor = null;
+let lastAntrianData = null; // snapshot data terakhir dari 'antrianDisplay', dipakai ulang oleh timer reset tengah malam
+const ICON_DOKTER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a5 5 0 0 0-5 5v2a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5Z"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg>';
+
+// FIX: toISOString() selalu UTC. Untuk WIB (UTC+7), itu membuat "hari ini"
+// baru dianggap berganti jam 07:00 pagi lokal (bukan jam 00:00), sehingga
+// reset tengah malam telat 7 jam. Ambil tanggal dari getFullYear/getMonth/
+// getDate (waktu lokal perangkat) supaya reset benar-benar tepat tengah malam.
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
+// ---------- Jam & tanggal ----------
+function tickClock() {
+  const now = new Date();
+  document.getElementById('jam').textContent =
+    now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  document.getElementById('tanggal').textContent =
+    now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+// ---------- Tema Terang/Malam ----------
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeBtn').textContent = (theme === 'light') ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'night';
+  const next = (current === 'light') ? 'night' : 'light';
+  applyTheme(next);
+  localStorage.setItem('displayTheme', next); // per-perangkat: TV ini ingat pilihan manual terakhir
+}
+// Tema awal: pakai pilihan manual perangkat ini kalau ada, kalau belum pernah
+// diganti manual maka ikuti 'defaultTema' dari pengaturan (lihat listener settings di bawah).
+(function initTheme() {
+  const saved = localStorage.getItem('displayTheme');
+  applyTheme(saved || 'night');
+})();
+
+// ---------- Layar Penuh ----------
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(function() {});
+  } else {
+    document.exitFullscreen().catch(function() {});
+  }
+}
+document.addEventListener('fullscreenchange', function() {
+  document.getElementById('fsBtn').textContent = document.fullscreenElement ? '⛶' : '⛶';
+  document.getElementById('fsBtn').title = document.fullscreenElement ? 'Keluar Layar Penuh' : 'Layar Penuh';
+});
+
+// ---------- Chime (Web Audio API, tanpa file audio eksternal) ----------
+function mainkanChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [880, 660].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + i * 0.35 + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.35 + 0.6);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.35);
+      osc.stop(ctx.currentTime + i * 0.35 + 0.6);
+    });
+  } catch (e) { /* abaikan kalau browser TV tidak izinkan audio otomatis */ }
+}
+function aktifkanSuara() {
+  document.getElementById('soundBtn').style.display = 'none';
+  mainkanChime();
+}
+let currentLanguage = 'id';
+
+const translations = {
+  id: {
+    displayTitle: "Display Panggilan Antrian",
+    sedangDilayani: "Sedang Dilayani",
+    menungguPanggilan: "Menunggu panggilan pertama…",
+    riwayatPanggilan: "Riwayat Panggilan",
+    belumAdaPanggilan: "Belum ada panggilan",
+    memuatPengumuman: "Memuat pengumuman…",
+    formatPanggilan: (no, nama, dokter) => `Nomor antrian ${no}, atas nama ${nama}, silakan menuju ke ruang ${dokter}`
+  },
+  en: {
+    displayTitle: "Queue Call Display",
+    sedangDilayani: "Now Serving",
+    menungguPanggilan: "Waiting for first call…",
+    riwayatPanggilan: "Call History",
+    belumAdaPanggilan: "No calls yet",
+    memuatPengumuman: "Loading announcement…",
+    formatPanggilan: (no, nama, dokter) => `Queue number ${no}, for ${nama}, please proceed to room ${dokter}`
+  },
+  su: {
+    displayTitle: "Pintonan Antrean",
+    sedangDilayani: "Nuju Dilayanan",
+    menungguPanggilan: "Ngetos pangpangan kahiji…",
+    riwayatPanggilan: "Sajarah Pangpangan",
+    belumAdaPanggilan: "Teu acan aya pangpangan",
+    memuatPengumuman: "Nuju ngamuat béwara…",
+    formatPanggilan: (no, nama, dokter) => `Nomer antrean ${no}, asmana ${nama}, mangga ka rohang ${dokter}`
+  }
+};
+
+function ucapkan(teks) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(teks);
+  
+  if (currentLanguage === 'en') {
+    u.lang = 'en-US';
+  } else {
+    // id and su use id-ID voice
+    u.lang = 'id-ID';
+  }
+  u.rate = 0.85;
+  
+  const voices = window.speechSynthesis.getVoices();
+  let selectedVoice = null;
+  if (currentLanguage === 'en') {
+    selectedVoice = voices.find(v => v.lang.toLowerCase().indexOf('en') !== -1);
+  } else {
+    selectedVoice = voices.find(v => v.lang.toLowerCase().indexOf('id') !== -1);
+  }
+  
+  if (selectedVoice) u.voice = selectedVoice;
+  window.speechSynthesis.speak(u);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// ---------- Render: panel "Sedang Dilayani" ----------
+function renderCurrent(data, isBaru) {
+  const area = document.getElementById('areaCurrent');
+  area.innerHTML = `
+    <div id="nomorCurrent" class="flash-in">${escapeHtml(String(data.nomorAntrian))}</div>
+    <div id="namaCurrent" class="flash-in">${escapeHtml(data.namaPasien || '')}</div>
+    <div id="dokterCurrent" class="flash-in">${ICON_DOKTER}${escapeHtml(data.namaDokter || '-')}</div>
+  `;
+  if (isBaru) {
+    const panel = document.getElementById('panelCurrent');
+    panel.classList.remove('ring-flash');
+    void panel.offsetWidth;
+    panel.classList.add('ring-flash');
+
+    mainkanChime();
+    const dokterLafal = (data.namaDokter || '').replace(/dr\.\s*/gi, 'Dokter ').trim();
+    setTimeout(() => {
+      const trans = translations[currentLanguage] || translations.id;
+      const ttsText = trans.formatPanggilan(data.nomorAntrian, data.namaPasien, dokterLafal);
+      ucapkan(ttsText);
+    }, 650);
+  }
+}
+function renderCurrentEmpty() {
+  const trans = translations[currentLanguage] || translations.id;
+  document.getElementById('areaCurrent').innerHTML = `<div class="empty-current">${trans.menungguPanggilan}</div>`;
+}
+
+// ---------- Render: panel "Antrian Berikutnya" ----------
+function renderNext(next) {
+  const area = document.getElementById('areaNext');
+  if (!area) return;
+  if (!next) {
+    area.innerHTML = '<div class="empty-next">Tidak ada antrian menunggu</div>';
+    return;
+  }
+  area.innerHTML = `
+    <div id="nomorNext">${escapeHtml(String(next.nomorAntrian))}</div>
+    <div id="dokterNext">${ICON_DOKTER}${escapeHtml(next.namaDokter || '-')}</div>
+  `;
+}
+
+// ---------- Render: riwayat panggilan ----------
+function renderRiwayat(list) {
+  const el = document.getElementById('riwayat');
+  const trans = translations[currentLanguage] || translations.id;
+  if (!list || !list.length) { el.innerHTML = `<span class="empty">${trans.belumAdaPanggilan}</span>`; return; }
+  el.innerHTML = list.map(r => `
+    <div class="item">
+      <div class="no">${escapeHtml(String(r.nomorAntrian))}</div>
+      <div class="nm">${escapeHtml(r.namaPasien || '')}</div>
+    </div>
+  `).join('');
+}
+
+// ---------- Reset tengah malam (tanpa Cloud Function) ----------
+// Data 'antrianDisplay' dianggap BASI kalau field 'tanggal' yang tersimpan
+// bukan hari ini (mis. TV menyala dari semalam & belum ada panggilan baru
+// sejak lewat tengah malam). Begitu basi, tampilan current/next/riwayat
+// dikosongkan lagi seolah baru mulai — otomatis "reset" jam 12 malam murni
+// dari sisi tampilan, karena nomor antrian itu sendiri memang sudah dihitung
+// ulang dari 1 setiap hari oleh js/klinik/antrian.js (query per tanggal).
+function isDataBasi(data) {
+  return !!(data && data.tanggal && data.tanggal !== todayStr());
+}
+function renderFromData(data) {
+  if (!data || isDataBasi(data)) {
+    lastNomor = null;
+    renderCurrentEmpty();
+    renderNext(null);
+    renderRiwayat([]);
+    return;
+  }
+  if (data.current && data.current.nomorAntrian) {
+    const isBaru = data.current.nomorAntrian !== lastNomor;
+    lastNomor = data.current.nomorAntrian;
+    renderCurrent(data.current, isBaru);
+  } else {
+    lastNomor = null;
+    renderCurrentEmpty();
+  }
+  renderNext(data.next || null);
+  renderRiwayat(data.riwayat);
+}
+
+// Cek ulang setiap menit — menangkap kasus tengah malam lewat TANPA ada
+// panggilan baru yang memicu onSnapshot (jadi datanya sendiri tidak berubah,
+// tapi "hari ini" berubah).
+setInterval(() => { if (lastAntrianData) renderFromData(lastAntrianData); }, 60000);
+
+// ---------- Listener real-time: data antrian ----------
+db.collection('pengaturan').doc('antrianDisplay').onSnapshot(function(doc) {
+  const live = document.getElementById('liveStatus');
+  live.classList.remove('off');
+  live.innerHTML = '<span class="dot"></span>Live';
+
+  lastAntrianData = doc.exists ? doc.data() : null;
+  renderFromData(lastAntrianData);
+}, function(err) {
+  const live = document.getElementById('liveStatus');
+  live.classList.add('off');
+  live.innerHTML = '<span class="dot"></span>Terputus';
+  console.error(err);
+});
+
+// ---------- Ambil ID video YouTube dari berbagai format link ----------
+function parseYoutubeId(link) {
+  if (!link) return null;
+  link = link.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(link)) return link; // sudah berupa ID langsung
+  const m = link.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+// ---------- Listener real-time: pengaturan tampilan (logo, running text, video, tema) ----------
+let themeManualOverride = !!localStorage.getItem('displayTheme');
+db.collection('pengaturan').doc('antrianDisplaySettings').onSnapshot(function(doc) {
+  const s = doc.exists ? doc.data() : {};
+
+  // Bahasa
+  const selectedLang = s.bahasa || 'id';
+  if (selectedLang !== currentLanguage) {
+    currentLanguage = selectedLang;
+    const trans = translations[currentLanguage] || translations.id;
+    
+    // Update labels
+    const titleEl = document.getElementById('displayTitle');
+    if (titleEl) titleEl.textContent = trans.displayTitle;
+    
+    const tagEl = document.getElementById('tagCurrent');
+    if (tagEl) tagEl.textContent = trans.sedangDilayani;
+    
+    const ftEl = document.getElementById('ftLabel');
+    if (ftEl) ftEl.textContent = trans.riwayatPanggilan;
+    
+    // Re-render
+    if (lastAntrianData) {
+      renderFromData(lastAntrianData);
+    } else {
+      renderCurrentEmpty();
+      renderRiwayat([]);
+    }
+  }
+
+  // Logo
+  const logoEl = document.getElementById('brandLogo');
+  if (s.logoBase64) { logoEl.src = s.logoBase64; logoEl.style.display = ''; }
+  else { logoEl.src = 'logostruk.png'; }
+
+  // Running text + label ikonik
+  document.getElementById('tickerLabel').textContent = s.runningLabel || 'INFO';
+  const tickerText = document.getElementById('tickerText');
+  tickerText.textContent = s.runningText || 'Selamat datang di Aulia Apotek & Klinik.';
+  // Kecepatan disesuaikan panjang teks supaya kecepatan geraknya konsisten,
+  // bukan makin cepat/lambat cuma karena teksnya pendek/panjang.
+  const durasi = Math.max(12, tickerText.textContent.length * 0.18);
+  tickerText.style.animationDuration = durasi + 's';
+
+  // Video YouTube
+  const videoId = s.tampilkanVideo ? parseYoutubeId(s.youtubeLink) : null;
+  const mainGrid = document.getElementById('mainGrid');
+  const panelVideo = document.getElementById('panelVideo');
+  const frame = document.getElementById('videoFrame');
+  if (videoId) {
+    frame.src = 'https://www.youtube.com/embed/' + videoId + '?autoplay=1&mute=1&loop=1&playlist=' + videoId + '&rel=0&modestbranding=1';
+    panelVideo.classList.add('active');
+    mainGrid.classList.add('with-video');
+    setTimeout(resizeVideo, 50); // Resize after DOM adjustments
+  } else {
+    frame.src = '';
+    panelVideo.classList.remove('active');
+    mainGrid.classList.remove('with-video');
+  }
+
+  // Tema default — HANYA dipakai kalau perangkat ini belum pernah di-toggle manual
+  if (!themeManualOverride && s.defaultTema) {
+    applyTheme(s.defaultTema);
+  }
+}, function(err) { console.error('Gagal memuat pengaturan display:', err); });
+
+// Tandai override manual setiap kali tombol tema ditekan, supaya listener
+// pengaturan di atas berhenti menimpa pilihan staf di perangkat ini.
+const _origToggleTheme = toggleTheme;
+toggleTheme = function() { _origToggleTheme(); themeManualOverride = true; };
+
+// Sebagian browser TV/kiosk memblokir audio/TTS otomatis sebelum ada
+// interaksi pengguna. Tampilkan tombol manual kalau itu terjadi.
+window.addEventListener('load', () => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') document.getElementById('soundBtn').style.display = 'block';
+  } catch (e) {
+    document.getElementById('soundBtn').style.display = 'block';
+  }
+  if ('speechSynthesis' in window) window.speechSynthesis.getVoices();
+});
+
+// Dynamic aspect-ratio sizing for perfect 16:9 YouTube frame without stretching or black bars
+function resizeVideo() {
+  const container = document.getElementById('panelVideo');
+  const iframe = document.getElementById('videoFrame');
+  if (!container || !iframe || !container.classList.contains('active')) return;
+  
+  // Read actual padding-compensated container boundaries
+  const w = container.clientWidth - 24; // 12px padding left + right
+  const h = container.clientHeight - 24; // 12px padding top + bottom
+  if (w <= 0 || h <= 0) return;
+
+  if (w / h > 16 / 9) {
+    // Container is wider than 16:9, so height is the limiting factor
+    iframe.style.height = h + 'px';
+    iframe.style.width = (h * 16 / 9) + 'px';
+  } else {
+    // Container is taller than 16:9, so width is the limiting factor
+    iframe.style.width = w + 'px';
+    iframe.style.height = (w * 9 / 16) + 'px';
+  }
+}
+
+// Trigger resize on window events
+window.addEventListener('resize', resizeVideo);
+// Add a ResizeObserver on the container for instant layout transition tracking
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(() => {
+    resizeVideo();
+  });
+  const panelVideoEl = document.getElementById('panelVideo');
+  if (panelVideoEl) ro.observe(panelVideoEl);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Core profile containing role and status for authorization",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Email address of the user"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "keuangan", "apotek", "klinik", "dokter"],
+          "description": "Role access control group"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["aktif", "non-aktif"],
+          "description": "Status of the user account"
+        }
+      },
+      "required": ["email", "role"]
+    },
+    "Obat": {
+      "title": "Medicine",
+      "description": "Master data for medicines and stock levels",
+      "type": "object",
+      "properties": {
+        "kodeObat": { "type": "string" },
+        "namaObat": { "type": "string" },
+        "kategori": { "type": "string" },
+        "satuan": { "type": "string" },
+        "hpp": { "type": "number" },
+        "hargaJual": { "type": "number" },
+        "stok": { "type": "integer" },
+        "stokMinimum": { "type": "integer" },
+        "expDate": { "type": "string" }
+      },
+      "required": ["kodeObat", "namaObat", "hpp", "hargaJual", "stok"]
+    },
+    "Transaksi": {
+      "title": "Transaction",
+      "description": "Sales transactions and pharmacy checkout records",
+      "type": "object",
+      "properties": {
+        "tanggal": { "type": "string" },
+        "namaPasien": { "type": "string" },
+        "tipe": { "type": "string", "enum": ["umum", "resep_klinik", "resep_luar"] },
+        "metodeBayar": { "type": "string", "enum": ["cash", "transfer", "qris"] },
+        "totalObat": { "type": "number" },
+        "totalRacik": { "type": "number" },
+        "totalTindakan": { "type": "number" },
+        "jasaResep": { "type": "number" },
+        "pembulatan": { "type": "number" },
+        "totalAkhir": { "type": "number" }
+      },
+      "required": ["tanggal", "tipe", "metodeBayar", "totalAkhir"]
+    },
+    "Pasien": {
+      "title": "Patient",
+      "description": "Patient medical registration profiles",
+      "type": "object",
+      "properties": {
+        "nomorRM": { "type": "string" },
+        "nama": { "type": "string" },
+        "jenisKelamin": { "type": "string", "enum": ["L", "P"] },
+        "usia": { "type": "integer" },
+        "noTelepon": { "type": "string" },
+        "alamat": { "type": "string" },
+        "alergiObat": { "type": "string" }
+      },
+      "required": ["nomorRM", "nama"]
+    },
+    "RekamMedis": {
+      "title": "Medical Record",
+      "description": "Patient clinical visit and diagnostic records",
+      "type": "object",
+      "properties": {
+        "tanggal": { "type": "string" },
+        "pasienId": { "type": "string" },
+        "dokterId": { "type": "string" },
+        "status": { "type": "string" },
+        "statusResep": { "type": "string" }
+      },
+      "required": ["tanggal", "pasienId"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "Immutable audit entries for critical system actions",
+      "type": "object",
+      "properties": {
+        "olehUid": { "type": "string" },
+        "oleh": { "type": "string" },
+        "role": { "type": "string" },
+        "aksi": { "type": "string" },
+        "modul": { "type": "string" },
+        "deskripsi": { "type": "string" },
+        "nominal": { "type": "number" }
+      },
+      "required": ["olehUid", "aksi", "modul", "deskripsi"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles collection"
+    },
+    "/obat/{obatId}": {
+      "schema": { "$ref": "#/entities/Obat" },
+      "description": "Pharmacy medicine database"
+    },
+    "/transaksi/{trxId}": {
+      "schema": { "$ref": "#/entities/Transaksi" },
+      "description": "Sales transactions and checkout records"
+    },
+    "/pasien/{id}": {
+      "schema": { "$ref": "#/entities/Pasien" },
+      "description": "Clinic patient profiles"
+    },
+    "/rekamMedis/{id}": {
+      "schema": { "$ref": "#/entities/RekamMedis" },
+      "description": "Patient medical records and history"
+    },
+    "/auditLog/{id}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable security and audit logs"
+    }
+  }
+}

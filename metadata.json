@@ -1,0 +1,8 @@
+{
+  "name": "AULIA Apotek dan Praktik Dokter Mandiri",
+  "description": "Aplikasi AULIA Apotek dan Praktik Dokter Mandiri - Sistem Manajemen Apotek, Antrian Klinik, Rekam Medis, Resep, dan Keuangan",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

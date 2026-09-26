@@ -50,6 +50,7 @@ window.AppManajemenKaryawan = {
         
         var role = window.currentRole || 'apotek';
         var canEdit = (role === 'keuangan');
+        var canQr = (role === 'admin' || role === 'keuangan' || role === 'psa');
 
         if (this.data.length === 0) {
             container.innerHTML = '<div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-8 text-center"><p class="text-slate-400">Belum ada data karyawan.</p></div>';
@@ -87,8 +88,10 @@ window.AppManajemenKaryawan = {
             if (canEdit || canQr) {
                 html += '<td class="px-4 py-3 text-right space-x-1">';
                 if (canQr) html += '<button onclick="AppManajemenKaryawan.tampilkanQr(\'' + k.id + '\')" title="QR Absensi" class="p-1.5 text-slate-400 hover:text-primary-600 rounded"><i data-lucide="qr-code" class="w-4 h-4"></i></button>';
-                html += '<button onclick="AppManajemenKaryawan.openForm(\'' + k.id + '\')" class="p-1.5 text-slate-400 hover:text-primary-600 rounded"><i data-lucide="pencil" class="w-4 h-4"></i></button>';
-                html += '<button onclick="AppManajemenKaryawan.hapus(\'' + k.id + '\', \'' + safeName + '\')" class="p-1.5 text-slate-400 hover:text-red-600 rounded"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
+                if (canEdit) {
+                    html += '<button onclick="AppManajemenKaryawan.openForm(\'' + k.id + '\')" class="p-1.5 text-slate-400 hover:text-primary-600 rounded"><i data-lucide="pencil" class="w-4 h-4"></i></button>';
+                    html += '<button onclick="AppManajemenKaryawan.hapus(\'' + k.id + '\', \'' + safeName + '\')" class="p-1.5 text-slate-400 hover:text-red-600 rounded"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
+                }
                 html += '</td>';
             }
             html += '</tr>';

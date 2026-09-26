@@ -334,7 +334,26 @@ window.AppKeuanganPayroll = {
         return (p && p.mulai) ? p.mulai : this.defaultAwalBulan;
     },
 
-    _hitungRekapPeriode: function(mulaiTgl, sampaiTgl) {
+    _karyawanHadirTanggal: function(karyawan, tanggal) {
+        if (!karyawan || !tanggal) return true;
+
+        var isKlinik = ['klinik', 'dokter'].indexOf((karyawan.departemen || '').toLowerCase()) !== -1;
+        // Aturan baru hanya berlaku untuk pegawai klinik/dokter.
+        // Pegawai apotek tidak kehilangan hasil kerja karena absensi.
+        if (!isKlinik) return true;
+
+        return this.dataAbsensi.some(function(a) {
+            var aDate = a.tanggal || a.tgl;
+            if (aDate !== tanggal) return false;
+
+            return (a.karyawanId && a.karyawanId === karyawan.id) ||
+                (a.userId && (a.userId === karyawan.userId || a.userId === karyawan.id)) ||
+                (a.namaKaryawan && a.namaKaryawan.toLowerCase().trim() === (karyawan.nama || '').toLowerCase().trim()) ||
+                (a.nama && a.nama.toLowerCase().trim() === (karyawan.nama || '').toLowerCase().trim());
+        });
+    },
+
+    _hitungRekapPeriode: function(mulaiTgl, sampaiTgl, karyawan) {
         var self = this;
         sampaiTgl = sampaiTgl || self.periodeSampaiGlobal || Utils.today();
         var cfg = this.configPembagian || {};
@@ -345,6 +364,11 @@ window.AppKeuanganPayroll = {
 
         this.dataTransaksi.forEach(function(t) {
             if (!t.tanggal || t.tanggal < mulaiTgl || t.tanggal > sampaiTgl) return;
+
+            // Untuk pegawai klinik/dokter, hasil kerja dihitung per hari hadir.
+            // Jika tidak ada absensi pada tanggal transaksi, hasil tanggal tersebut
+            // tidak masuk ke bagian pegawai itu. Pegawai apotek tetap dihitung penuh.
+            if (karyawan && !self._karyawanHadirTanggal(karyawan, t.tanggal)) return;
 
             var omzetObat = t.items ? t.items.reduce(function(s, i) { return s + ((i.jumlah || 0) * (i.hargaJual || 0)); }, 0) : 0;
             var hppObat = t.items ? t.items.reduce(function(s, i) { return s + ((i.jumlah || 0) * (i.hargaBeli || 0)); }, 0) : 0;
@@ -449,7 +473,7 @@ window.AppKeuanganPayroll = {
 
         this.dataKaryawan.forEach(function(k) {
             var mulaiK = self._mulaiKaryawan(k.id);
-            var rekap = self._hitungRekapPeriode(mulaiK, self.periodeSampaiGlobal);
+            var rekap = self._hitungRekapPeriode(mulaiK, self.periodeSampaiGlobal, k);
             var rekapDokter = rekap.rekapDokter;
             var depKey = (k.departemen || '').toLowerCase();
 
@@ -460,14 +484,18 @@ window.AppKeuanganPayroll = {
             if (gajiCfg) gajiPokok = gajiCfg.gajiPokok || 0;
 
             // Hari Kerja (hanya dalam window periode karyawan ybs.)
-            var hadir = self.dataAbsensi.filter(function(a) {
+            var hadirDates = {};
+            self.dataAbsensi.forEach(function(a) {
                 var aDate = a.tanggal || a.tgl;
                 var matchesUser = (a.userId && (a.userId === k.userId || a.userId === k.id)) ||
                                   (a.karyawanId && a.karyawanId === k.id) ||
                                   (a.namaKaryawan && a.namaKaryawan.toLowerCase().trim() === (k.nama || '').toLowerCase().trim()) ||
                                   (a.nama && a.nama.toLowerCase().trim() === (k.nama || '').toLowerCase().trim());
-                return matchesUser && aDate >= mulaiK && aDate <= self.periodeSampaiGlobal;
-            }).length;
+                if (matchesUser && aDate >= mulaiK && aDate <= self.periodeSampaiGlobal) {
+                    hadirDates[aDate] = true;
+                }
+            });
+            var hadir = Object.keys(hadirDates).length;
 
             // Jasa Medis (JM) & Jasa Dokter (JD)
             var jasaMedis = 0, jasaDokter = 0, jasaResepLuar = 0;

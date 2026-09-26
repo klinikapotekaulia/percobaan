@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "klinikapotekaulia-61641"
+  },
+  "targets": {
+    "klinikapotekaulia-61641": {
+      "hosting": {
+        "aulia-testing": [
+          "aulia-testing"
+        ]
+      }
+    }
   }
 }

@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "target": "aulia-testing",
     "public": ".",
     "ignore": [
       "firebase.json",

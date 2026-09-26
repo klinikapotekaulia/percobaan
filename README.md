@@ -1,20 +1,41 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# AULIA Apotek & Klinik
 
-# Run and deploy your AI Studio app
+Aplikasi manajemen Apotek dan Klinik AULIA.
 
-This contains everything you need to run your app locally.
+## Fitur utama
 
-View your app in AI Studio: https://ai.studio/apps/253d8626-cd20-481a-a650-fd63fe7b92c9
+- Manajemen apotek dan stok obat
+- Transaksi penjualan dan pembelian
+- Antrian dan rekam medis klinik
+- Resep dan tindakan klinik
+- Keuangan, laporan, dan payroll
+- Manajemen pengguna dan role
+- Absensi karyawan
+- Integrasi SatuSehat
+- PWA / service worker
 
-## Run Locally
+## Menjalankan secara lokal
 
-**Prerequisites:**  Node.js
+Prasyarat: Node.js
 
+Install dependensi:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+    npm install
+
+Build CSS:
+
+    npm run build:css
+
+Jalankan aplikasi:
+
+    npm start
+
+Development:
+
+    npm run dev
+
+## Konfigurasi
+
+Gunakan environment variable Firebase sesuai file .env.example.
+
+Aplikasi tidak bergantung pada Google AI Studio atau Gemini API.

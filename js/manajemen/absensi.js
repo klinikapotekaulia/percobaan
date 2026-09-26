@@ -12,6 +12,7 @@ window.AppManajemenAbsensi = {
     render: function() {
         var role = window.currentRole || 'apotek';
         var isStaff = (role === 'klinik' || role === 'apotek' || role === 'admin');
+        var canScanQr = (role === 'admin' || role === 'keuangan' || role === 'psa');
 
         var html = '<div class="page-enter max-w-5xl">';
         html += '  <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-1">Absensi Karyawan</h2>';
@@ -32,6 +33,9 @@ window.AppManajemenAbsensi = {
             html += '</div>';
         }
 
+        if (canScanQr) {
+            html += '<div class="flex justify-end mb-4"><button onclick="AppManajemenAbsensi.openQrScanner()" class="bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition flex items-center gap-2"><i data-lucide="scan-line" class="w-4 h-4"></i> Scan QR Karyawan</button></div>';
+        }
         html += '  <div id="absensi-list"><div class="flex justify-center py-10"><div class="spinner"></div></div></div>';
         html += '</div>';
         return html;
@@ -59,6 +63,163 @@ window.AppManajemenAbsensi = {
                 self.renderMyAbsensi();
             }
         }).catch(err => Utils.toast('Gagal memuat: ' + err.message, 'error'));
+    },
+
+    _qrStream: null,
+    _qrFrame: null,
+
+    openQrScanner: function() {
+        var role = window.currentRole || '';
+        if (role !== 'admin' && role !== 'keuangan' && role !== 'psa') {
+            Utils.toast('Anda tidak memiliki akses scan QR absensi.', 'error');
+            return;
+        }
+        if (typeof jsQR === 'undefined') {
+            Utils.toast('Library scanner QR belum berhasil dimuat. Coba refresh halaman.', 'error');
+            return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            Utils.toast('Browser/perangkat ini tidak menyediakan akses kamera.', 'error');
+            return;
+        }
+
+        this._stopQrScanner();
+
+        var html = '<div class="p-5">';
+        html += '<div class="flex items-center justify-between mb-4"><div><h3 class="text-lg font-bold text-gray-800 dark:text-white">Scan QR Absensi</h3><p class="text-xs text-slate-400 mt-1">Arahkan kamera ke QR pegawai.</p></div><button onclick="AppManajemenAbsensi._stopQrScanner(); Utils.closeModal();" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><i data-lucide="x" class="w-5 h-5 text-slate-400"></i></button></div>';
+        html += '<div class="relative overflow-hidden rounded-2xl bg-black aspect-square max-w-md mx-auto">';
+        html += '<video id="qr-camera" autoplay playsinline muted class="w-full h-full object-cover"></video>';
+        html += '<div class="absolute inset-8 border-2 border-white/80 rounded-xl pointer-events-none"></div>';
+        html += '<canvas id="qr-canvas" class="hidden"></canvas></div>';
+        html += '<p id="qr-scan-status" class="text-center text-sm text-slate-500 dark:text-slate-400 mt-4">Meminta akses kamera...</p>';
+        html += '</div>';
+
+        Utils.openModal(html);
+        lucide.createIcons();
+
+        var self = this;
+        navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        }).then(function(stream) {
+            self._qrStream = stream;
+            var video = document.getElementById('qr-camera');
+            if (!video) { self._stopQrScanner(); return; }
+            video.srcObject = stream;
+            video.setAttribute('playsinline', 'true');
+            video.play().then(function() {
+                self._scanQrFrame();
+            }).catch(function(err) {
+                Utils.toast('Kamera tidak dapat dijalankan: ' + err.message, 'error');
+            });
+        }).catch(function(err) {
+            var status = document.getElementById('qr-scan-status');
+            if (status) status.textContent = 'Kamera tidak dapat diakses: ' + err.message;
+            Utils.toast('Akses kamera ditolak/tidak tersedia.', 'error');
+        });
+    },
+
+    _scanQrFrame: function() {
+        var self = this;
+        var video = document.getElementById('qr-camera');
+        var canvas = document.getElementById('qr-canvas');
+        if (!video || !canvas || !self._qrStream) return;
+
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            var width = video.videoWidth;
+            var height = video.videoHeight;
+            if (width && height) {
+                canvas.width = width;
+                canvas.height = height;
+                var ctx = canvas.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(video, 0, 0, width, height);
+                var image = ctx.getImageData(0, 0, width, height);
+                var code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' });
+                if (code && code.data) {
+                    self._handleQrResult(code.data);
+                    return;
+                }
+            }
+        }
+        self._qrFrame = requestAnimationFrame(function() { self._scanQrFrame(); });
+    },
+
+    _stopQrScanner: function() {
+        if (this._qrFrame) {
+            cancelAnimationFrame(this._qrFrame);
+            this._qrFrame = null;
+        }
+        if (this._qrStream) {
+            this._qrStream.getTracks().forEach(function(track) { track.stop(); });
+            this._qrStream = null;
+        }
+        var video = document.getElementById('qr-camera');
+        if (video) video.srcObject = null;
+    },
+
+    _handleQrResult: function(payload) {
+        this._stopQrScanner();
+
+        if (typeof payload !== 'string' || payload.indexOf('AULIA-EMPLOYEE|') !== 0) {
+            Utils.toast('QR bukan QR absensi karyawan Aulia.', 'error');
+            setTimeout(function(){ if (document.getElementById('global-modal')) AppManajemenAbsensi.openQrScanner(); }, 700);
+            return;
+        }
+
+        var karyawanId = payload.substring('AULIA-EMPLOYEE|'.length).trim();
+        if (!karyawanId) {
+            Utils.toast('QR tidak memiliki ID karyawan.', 'error');
+            return;
+        }
+
+        var self = this;
+        db.collection('karyawan').doc(karyawanId).get().then(function(doc) {
+            if (!doc.exists) {
+                Utils.toast('Karyawan pada QR tidak ditemukan.', 'error');
+                return;
+            }
+
+            var k = doc.data();
+            if (k.status === 'nonaktif') {
+                Utils.toast('Karyawan ini berstatus nonaktif.', 'warning');
+                return;
+            }
+
+            var duplicate = self.data.some(function(a) {
+                var sameDate = (a.tanggal || a.tgl) === self.todayStr;
+                var sameKaryawan = (a.karyawanId === karyawanId) ||
+                    (k.userId && a.userId === k.userId) ||
+                    (a.userId === karyawanId);
+                return sameDate && sameKaryawan;
+            });
+
+            if (duplicate) {
+                Utils.toast((k.nama || 'Karyawan') + ' sudah tercatat hadir hari ini.', 'warning');
+                return;
+            }
+
+            var current = firebase.auth().currentUser;
+            db.collection('absensi').add({
+                tanggal: self.todayStr,
+                karyawanId: karyawanId,
+                userId: k.userId || null,
+                namaKaryawan: k.nama || '-',
+                departemen: k.departemen || null,
+                checkIn: firebase.firestore.FieldValue.serverTimestamp(),
+                checkOut: null,
+                metode: 'qr-admin',
+                inputOleh: window.currentUserName || 'Admin',
+                inputOlehUid: current ? current.uid : null,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(function() {
+                Utils.toast('Absensi ' + (k.nama || 'karyawan') + ' berhasil dicatat.', 'success');
+                self.init();
+            }).catch(function(err) {
+                Utils.toast('Gagal menyimpan absensi: ' + err.message, 'error');
+            });
+        }).catch(function(err) {
+            Utils.toast('Gagal membaca data karyawan: ' + err.message, 'error');
+        });
     },
 
     // ===== LOGIC ABSENSI DIRI (STAFF) =====

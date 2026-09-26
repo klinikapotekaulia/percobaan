@@ -1,0 +1,334 @@
+/* ============================================================
+   Vaporwave Cyberpunk 2099 — Ultra HUD & Synthwave Theme (theme-win98)
+   Didesain untuk tampilan futuristik, high-tech, glassmorphism, dan interactive cyber HUD.
+   ============================================================ */
+
+/* 1. Global Page Base & Cosmic Mesh Background */
+body.theme-win98 {
+  background: radial-gradient(circle at 50% 20%, #1e0738 0%, #0c0218 60%, #05000a 100%) !important;
+  color: #f3e8ff !important;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Retrowave Perspective Grid Canvas / Background Effect */
+body.theme-win98::after {
+  content: "";
+  position: fixed;
+  bottom: 0;
+  left: -50%;
+  right: -50%;
+  height: 35vh;
+  background-image: 
+    linear-gradient(0deg, transparent 24%, rgba(0, 243, 255, 0.12) 25%, rgba(0, 243, 255, 0.12) 26%, transparent 27%, transparent 74%, rgba(236, 72, 153, 0.15) 75%, rgba(236, 72, 153, 0.15) 76%, transparent 77%),
+    linear-gradient(90deg, transparent 24%, rgba(0, 243, 255, 0.12) 25%, rgba(0, 243, 255, 0.12) 26%, transparent 27%, transparent 74%, rgba(236, 72, 153, 0.15) 75%, rgba(236, 72, 153, 0.15) 76%, transparent 77%);
+  background-size: 50px 50px;
+  transform: perspective(300px) rotateX(60deg);
+  animation: cyberGridMove 8s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.65;
+}
+
+@keyframes cyberGridMove {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 50px; }
+}
+
+/* 2. Panels, Sidebar, and Header Overrides */
+body.theme-win98 aside,
+body.theme-win98 header,
+body.theme-win98 main,
+body.theme-win98 #sidebar {
+  background-color: rgba(15, 5, 28, 0.88) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  border-color: rgba(236, 72, 153, 0.4) !important;
+  position: relative;
+  z-index: 10;
+}
+
+body.theme-win98 #mobile-sidebar {
+  background-color: rgba(15, 5, 28, 0.96) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  border-color: rgba(236, 72, 153, 0.4) !important;
+  position: fixed !important;
+  z-index: 50 !important;
+}
+
+body.theme-win98 header {
+  border-bottom: 1px solid rgba(0, 243, 255, 0.4) !important;
+  box-shadow: 0 4px 20px rgba(0, 243, 255, 0.15) !important;
+}
+
+/* 3. Glassmorphism Cyber Cards & Containers */
+body.theme-win98 .bg-white,
+body.theme-win98 .dark\:bg-slate-800,
+body.theme-win98 .bg-slate-50,
+body.theme-win98 .dark\:bg-slate-900\/50,
+body.theme-win98 .dark\:bg-slate-800\/50 {
+  background: rgba(22, 8, 41, 0.75) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  border: 1px solid rgba(236, 72, 153, 0.35) !important;
+  box-shadow: 0 8px 24px 0 rgba(157, 0, 255, 0.2), inset 0 0 12px rgba(0, 243, 255, 0.08) !important;
+  border-radius: 14px !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+}
+
+body.theme-win98 .bg-white:hover,
+body.theme-win98 .dark\:bg-slate-800:hover {
+  border-color: rgba(0, 243, 255, 0.6) !important;
+  box-shadow: 0 10px 30px rgba(0, 243, 255, 0.25), inset 0 0 15px rgba(236, 72, 153, 0.15) !important;
+}
+
+/* 4. Cyber Form Elements: Inputs, Selects, Textareas */
+body.theme-win98 input,
+body.theme-win98 select,
+body.theme-win98 textarea {
+  background-color: #090214 !important;
+  color: #00f3ff !important;
+  border: 1px solid rgba(236, 72, 153, 0.6) !important;
+  box-shadow: inset 0 0 8px rgba(236, 72, 153, 0.2) !important;
+  border-radius: 8px !important;
+  font-family: inherit !important;
+  transition: all 0.2s ease !important;
+}
+
+body.theme-win98 input::placeholder,
+body.theme-win98 textarea::placeholder {
+  color: rgba(216, 180, 254, 0.4) !important;
+}
+
+body.theme-win98 input:focus,
+body.theme-win98 select:focus,
+body.theme-win98 textarea:focus {
+  border-color: #00f3ff !important;
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.65), inset 0 0 8px rgba(0, 243, 255, 0.3) !important;
+  outline: none !important;
+  color: #ffffff !important;
+}
+
+/* 5. Buttons with Neon Shimmer & Electric Gradient */
+body.theme-win98 button,
+body.theme-win98 .btn {
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.6) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+body.theme-win98 .bg-primary-600,
+body.theme-win98 .bg-primary-500,
+body.theme-win98 .hover\:bg-primary-700:hover,
+body.theme-win98 button[onclick*="save"],
+body.theme-win98 button[type="submit"] {
+  background: linear-gradient(135deg, #ff007f 0%, #a855f7 50%, #00f3ff 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  box-shadow: 0 0 14px rgba(236, 72, 153, 0.5), 0 0 4px rgba(0, 243, 255, 0.4) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+}
+
+body.theme-win98 .bg-primary-600:hover,
+body.theme-win98 .bg-primary-500:hover,
+body.theme-win98 button[type="submit"]:hover {
+  transform: translateY(-1px) scale(1.02) !important;
+  box-shadow: 0 0 22px rgba(236, 72, 153, 0.8), 0 0 30px rgba(0, 243, 255, 0.6) !important;
+  filter: brightness(1.15) !important;
+}
+
+body.theme-win98 .bg-emerald-600,
+body.theme-win98 .bg-emerald-500,
+body.theme-win98 .bg-green-600 {
+  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #00ff9d 100%) !important;
+  color: #022c22 !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 12px rgba(0, 255, 157, 0.5) !important;
+}
+
+body.theme-win98 .bg-rose-600,
+body.theme-win98 .bg-red-600 {
+  background: linear-gradient(135deg, #ff0055 0%, #dc2626 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 12px rgba(255, 0, 85, 0.6) !important;
+}
+
+/* 6. Text Highlights & Glowing Typography */
+body.theme-win98 h1, 
+body.theme-win98 h2, 
+body.theme-win98 h3 {
+  color: #ffffff !important;
+  text-shadow: 0 0 8px rgba(236, 72, 153, 0.4), 0 0 15px rgba(0, 243, 255, 0.2) !important;
+}
+
+body.theme-win98 .text-primary-600,
+body.theme-win98 .text-primary-500,
+body.theme-win98 .dark\:text-primary-400 {
+  color: #ff77bc !important;
+  text-shadow: 0 0 6px rgba(255, 119, 188, 0.6) !important;
+}
+
+body.theme-win98 .text-accent-600,
+body.theme-win98 .text-accent-500,
+body.theme-win98 .text-green-600 {
+  color: #00ff9d !important;
+  text-shadow: 0 0 6px rgba(0, 255, 157, 0.6) !important;
+}
+
+body.theme-win98 .text-amber-600,
+body.theme-win98 .text-amber-500 {
+  color: #ffb700 !important;
+  text-shadow: 0 0 6px rgba(255, 183, 0, 0.6) !important;
+}
+
+/* 7. Cyber Tables & Lists */
+body.theme-win98 table {
+  border-collapse: separate !important;
+  border-spacing: 0 6px !important;
+  width: 100% !important;
+}
+
+body.theme-win98 tr {
+  background-color: rgba(20, 7, 40, 0.65) !important;
+  border-radius: 10px !important;
+  transition: all 0.2s ease !important;
+}
+
+body.theme-win98 tr:hover {
+  background-color: rgba(236, 72, 153, 0.2) !important;
+  box-shadow: 0 0 12px rgba(236, 72, 153, 0.25), inset 0 0 10px rgba(0, 243, 255, 0.15) !important;
+}
+
+body.theme-win98 th {
+  background: linear-gradient(90deg, rgba(43, 19, 79, 0.9) 0%, rgba(20, 8, 42, 0.9) 100%) !important;
+  color: #00f3ff !important;
+  border-bottom: 2px solid #ec4899 !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  font-size: 0.75rem !important;
+  padding: 10px 14px !important;
+}
+
+body.theme-win98 td {
+  border-color: rgba(236, 72, 153, 0.15) !important;
+  padding: 10px 14px !important;
+}
+
+/* 8. Navigation Links & Active States */
+body.theme-win98 nav a,
+body.theme-win98 aside a {
+  color: #d8b4fe !important;
+  border-radius: 10px !important;
+  transition: all 0.2s ease !important;
+}
+
+body.theme-win98 nav a:hover,
+body.theme-win98 aside a:hover {
+  background: rgba(0, 243, 255, 0.15) !important;
+  color: #00f3ff !important;
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.2) !important;
+}
+
+body.theme-win98 nav a.active,
+body.theme-win98 aside a.active {
+  background: linear-gradient(90deg, rgba(236, 72, 153, 0.3) 0%, rgba(168, 85, 247, 0.2) 100%) !important;
+  color: #ffffff !important;
+  border-left: 4px solid #ff007f !important;
+  box-shadow: 0 0 15px rgba(236, 72, 153, 0.4) !important;
+  text-shadow: 0 0 8px rgba(255, 0, 127, 0.6) !important;
+}
+
+/* 9. Badges, Chips & Status Pillars */
+body.theme-win98 .bg-slate-100,
+body.theme-win98 .bg-gray-100,
+body.theme-win98 .dark\:bg-slate-700 {
+  background-color: #240d42 !important;
+  color: #e9d5ff !important;
+  border: 1px solid rgba(236, 72, 153, 0.3) !important;
+  box-shadow: 0 0 6px rgba(157, 0, 255, 0.2) !important;
+}
+
+body.theme-win98 .bg-emerald-100,
+body.theme-win98 .dark\:bg-emerald-900\/30 {
+  background-color: rgba(0, 255, 157, 0.15) !important;
+  color: #00ff9d !important;
+  border: 1px solid rgba(0, 255, 157, 0.4) !important;
+}
+
+body.theme-win98 .bg-rose-100,
+body.theme-win98 .dark\:bg-rose-900\/30 {
+  background-color: rgba(255, 0, 85, 0.15) !important;
+  color: #ff0055 !important;
+  border: 1px solid rgba(255, 0, 85, 0.4) !important;
+}
+
+/* 10. Cyber Scrollbars */
+body.theme-win98 ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+body.theme-win98 ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ff007f 0%, #00f3ff 100%) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 0 8px #ff007f !important;
+}
+
+body.theme-win98 ::-webkit-scrollbar-track {
+  background: #080112 !important;
+}
+
+/* 11. Interactive Cyber Scanlines Overlay Effect (Toggleable) */
+body.theme-win98.has-scanlines::before {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: 
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%), 
+    linear-gradient(90deg, rgba(255, 0, 0, 0.04), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.04));
+  z-index: 99999;
+  background-size: 100% 4px, 6px 100%;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* 12. Cyber HUD Top Status Bar */
+.cyber-hud-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: linear-gradient(90deg, rgba(255, 0, 127, 0.2) 0%, rgba(0, 243, 255, 0.2) 100%);
+  border-bottom: 1px solid rgba(0, 243, 255, 0.4);
+  font-family: monospace;
+  font-size: 11px;
+  color: #00f3ff;
+  text-shadow: 0 0 5px rgba(0, 243, 255, 0.6);
+}
+
+.cyber-hud-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  background: rgba(10, 2, 20, 0.8);
+  border: 1px solid #ff007f;
+  border-radius: 6px;
+  box-shadow: 0 0 8px rgba(255, 0, 127, 0.3);
+}
+
+.cyber-hud-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #00ff9d;
+  box-shadow: 0 0 8px #00ff9d;
+  animation: cyberBlink 1.5s infinite;
+}
+
+@keyframes cyberBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}

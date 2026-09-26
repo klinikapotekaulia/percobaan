@@ -10,7 +10,8 @@ window.AppManajemenKaryawan = {
 
     render: function() {
         var role = window.currentRole || 'apotek';
-        var canEdit = (role === 'keuangan'); // FIX: sesuai permintaan, Admin view-only, Keuangan yang CRUD karyawan
+        var canEdit = (role === 'keuangan');
+        var canQr = (role === 'admin' || role === 'keuangan' || role === 'psa'); // FIX: sesuai permintaan, Admin view-only, Keuangan yang CRUD karyawan
 
         var html = '<div class="page-enter max-w-4xl">';
         html += '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">';
@@ -64,7 +65,7 @@ window.AppManajemenKaryawan = {
         html += '<th class="px-4 py-3 text-left hidden md:table-cell">Jabatan</th>';
         html += '<th class="px-4 py-3 text-left hidden lg:table-cell">Akun Login</th>';
         html += '<th class="px-4 py-3 text-center">Status</th>';
-        if (canEdit) html += '<th class="px-4 py-3 text-right">Aksi</th>';
+        if (canEdit || canQr) html += '<th class="px-4 py-3 text-right">Aksi</th>';
         html += '</tr></thead><tbody>';
 
         this.data.forEach(k => {
@@ -83,8 +84,9 @@ window.AppManajemenKaryawan = {
             html += '<td class="px-4 py-3 hidden lg:table-cell">' + akunInfo + '</td>';
             html += '<td class="px-4 py-3 text-center">' + statusBadge + '</td>';
             
-            if (canEdit) {
+            if (canEdit || canQr) {
                 html += '<td class="px-4 py-3 text-right space-x-1">';
+                if (canQr) html += '<button onclick="AppManajemenKaryawan.tampilkanQr(\'' + k.id + '\')" title="QR Absensi" class="p-1.5 text-slate-400 hover:text-primary-600 rounded"><i data-lucide="qr-code" class="w-4 h-4"></i></button>';
                 html += '<button onclick="AppManajemenKaryawan.openForm(\'' + k.id + '\')" class="p-1.5 text-slate-400 hover:text-primary-600 rounded"><i data-lucide="pencil" class="w-4 h-4"></i></button>';
                 html += '<button onclick="AppManajemenKaryawan.hapus(\'' + k.id + '\', \'' + safeName + '\')" class="p-1.5 text-slate-400 hover:text-red-600 rounded"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
                 html += '</td>';
@@ -95,6 +97,65 @@ window.AppManajemenKaryawan = {
         html += '</tbody></table></div></div>';
         container.innerHTML = html;
         lucide.createIcons();
+    },
+
+    tampilkanQr: function(id) {
+        var k = this.data.find(function(x) { return x.id === id; });
+        if (!k) return;
+
+        if (typeof QRCode === 'undefined') {
+            Utils.toast('Library QR belum berhasil dimuat. Coba refresh halaman.', 'error');
+            return;
+        }
+
+        var namaFile = (k.nama || 'karyawan').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'karyawan';
+        var payload = 'AULIA-EMPLOYEE|' + k.id;
+
+        var html = '<div class="p-6 text-center">';
+        html += '<div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-gray-800 dark:text-white">QR Absensi Karyawan</h3><button onclick="Utils.closeModal()" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><i data-lucide="x" class="w-5 h-5 text-slate-400"></i></button></div>';
+        html += '<p class="font-semibold text-gray-800 dark:text-white">' + Utils.escapeHtml(k.nama || '-') + '</p>';
+        html += '<p class="text-xs text-slate-400 mb-4">' + Utils.escapeHtml(k.departemen || '-') + ' • QR khusus absensi</p>';
+        html += '<div id="employee-qrcode" class="mx-auto w-[320px] h-[320px] flex items-center justify-center bg-white p-3 rounded-xl border border-slate-200"></div>';
+        html += '<p class="text-[11px] text-slate-400 mt-3">Simpan/cetak gambar QR ini untuk dipindai Admin saat absensi.</p>';
+        html += '<div class="flex justify-center gap-2 mt-4">';
+        html += '<button onclick="AppManajemenKaryawan.downloadQr('' + id + '', '' + namaFile + '')" class="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-semibold flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i> Download PNG</button>';
+        html += '<button onclick="Utils.closeModal()" class="px-4 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-semibold">Tutup</button>';
+        html += '</div></div>';
+
+        Utils.openModal(html);
+        setTimeout(function() {
+            var target = document.getElementById('employee-qrcode');
+            if (target) {
+                new QRCode(target, {
+                    text: payload,
+                    width: 300,
+                    height: 300,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            }
+        }, 50);
+    },
+
+    downloadQr: function(id, namaFile) {
+        var box = document.getElementById('employee-qrcode');
+        if (!box) return;
+        var img = box.querySelector('img');
+        var canvas = box.querySelector('canvas');
+        var dataUrl = img && img.src ? img.src : (canvas ? canvas.toDataURL('image/png') : null);
+        if (!dataUrl) {
+            Utils.toast('QR belum selesai dibuat. Coba lagi.', 'warning');
+            return;
+        }
+
+        var a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'QR-Absensi-' + (namaFile || id) + '.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        Utils.toast('QR berhasil diunduh sebagai PNG.', 'success');
     },
 
     openForm: function(id) {

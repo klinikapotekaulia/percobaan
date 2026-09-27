@@ -844,16 +844,16 @@ window.AppKeuanganPayroll = {
                 html += '<td class="px-2 py-2 text-right text-indigo-600">' + Utils.formatRupiah(k.bagRacik) + '</td>';
 
                 html += '<td class="px-2 py-2 text-right bg-amber-50/50 dark:bg-amber-900/10">';
-                html += '<div class="font-bold text-amber-700 dark:text-amber-400" title="Total Akumulasi THR">' + Utils.formatRupiah(k.thrSaldoProyeksi) + '</div>';
+                html += '<div class="font-bold text-amber-700 dark:text-amber-400" title="Total Akumulasi THR">' + Utils.formatRupiah(thrYangDibayar) + '</div>';
                 html += '<div class="text-[10px] text-slate-500 flex flex-col items-end mt-0.5">';
                 html += '<span>Akumulasi: ' + Utils.formatRupiah(k.thrSaldoSebelum) + '</span>';
                 if (k.thrBulanIni > 0) html += '<span class="text-emerald-600 font-semibold">+' + Utils.formatRupiah(k.thrBulanIni) + ' bulan ini</span>';
                 html += '</div></td>';
                 html += '<td class="px-2 py-2 text-center bg-amber-50/50 dark:bg-amber-900/10">';
-                if (k.thrSaldoProyeksi > 0) {
-                    html += '<button onclick="AppKeuanganPayroll.bayarTHR(' + idx + ')" class="text-[10px] bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1.5 rounded-lg font-bold shadow-sm transition">Bayarkan &amp; Reset</button>';
+                if (k.thrSaldoSebelum > 0) {
+                    html += '<button onclick="AppKeuanganPayroll.bayarTHR(' + idx + ')" class="text-[10px] bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1.5 rounded-lg font-bold shadow-sm transition">Bayarkan THR Tersimpan</button>';
                 } else {
-                    html += '<span class="text-[10px] text-slate-400 font-medium">Rp 0</span>';
+                    html += '<span class="text-[10px] text-slate-400 font-medium">Belum terbentuk</span>';
                 }
                 html += '</td>';
 
@@ -1181,10 +1181,15 @@ window.AppKeuanganPayroll = {
     bayarTHR: function(idx) {
         var self = this;
         var k = this.kalkulasiGaji[idx];
-        if (!k || k.thrSaldoProyeksi <= 0) return;
+        if (!k || k.thrSaldoSebelum <= 0) return;
 
+        // Hanya saldo THR yang SUDAH terbentuk di thrTabungan yang boleh dibayarkan.
+        // thrSaldoProyeksi juga memuat THR bulan berjalan yang belum diposting sampai
+        // payroll benar-benar dibayarkan, sehingga membayar proyeksi akan membayar
+        // kewajiban yang belum pernah terbentuk.
+        var thrYangDibayar = k.thrSaldoSebelum;
         var bulan = this.selectedTargetBulan || Utils.today().slice(0, 7);
-        if (!confirm('Bayarkan THR ' + k.nama + ' sebesar ' + Utils.formatRupiah(k.thrSaldoProyeksi) + ' dan reset tabungan menjadi Rp 0?')) return;
+        if (!confirm('Bayarkan THR tersimpan ' + k.nama + ' sebesar ' + Utils.formatRupiah(thrYangDibayar) + ' dan reset tabungan menjadi Rp 0?')) return;
 
         Utils.toast('Memproses pembayaran THR...', 'info');
         var batch = db.batch();
@@ -1201,7 +1206,7 @@ window.AppKeuanganPayroll = {
         batch.set(historyRef, {
             karyawanId: k.karyawanId,
             namaKaryawan: k.nama,
-            jumlah: k.thrSaldoProyeksi,
+            jumlah: thrYangDibayar,
             bulanDibayarkan: bulan,
             dibayarkanOleh: window.currentUserName || 'Keuangan',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1220,7 +1225,7 @@ window.AppKeuanganPayroll = {
             kategoriId: 'thr',
             tipeArusKas: 'thr_payroll',
             akunKas: 'Kas Utama / Bank',
-            jumlah: k.thrSaldoProyeksi,
+            jumlah: thrYangDibayar,
             penerima: k.nama,
             keterangan: 'Pembayaran THR & Tabungan THR untuk ' + k.nama,
             status: 'approved',
@@ -1233,7 +1238,7 @@ window.AppKeuanganPayroll = {
             Utils.toast('THR ' + k.nama + ' berhasil dibayarkan &amp; direset.', 'success');
             AuditLog.catat({
                 aksi: 'bayar', modul: 'Payroll - THR', koleksi: 'thrPembayaranHistory', targetId: k.karyawanId,
-                deskripsi: 'Bayar THR: ' + k.nama, nominal: k.thrSaldoProyeksi
+                deskripsi: 'Bayar THR: ' + k.nama, nominal: thrYangDibayar
             });
             self.init();
         }).catch(function(err) {

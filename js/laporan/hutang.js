@@ -535,6 +535,10 @@ window.AppLaporanHutang = {
             jatuhTempo: jatuhTempo,
             totalHarga: totalHarga,
             catatan: catatan,
+            sumberHutang: 'manual',
+            // Tagihan manual tidak menambah stok; akun lawannya adalah beban operasional
+            // kecuali nanti diubah secara eksplisit oleh modul yang membuat tagihan.
+            akunDebitHutang: '5-2300',
             inputOleh: nama,
             inputRole: role,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -664,15 +668,19 @@ window.AppLaporanHutang = {
             // laporanKeuangan.js & dashboardKeuangan.js untuk MENGECUALIKAN dokumen ini dari
             // "Biaya Operasional", sambil tetap menghitungnya sebagai kas keluar riil (baris
             // "Pembayaran Hutang Usaha" tersendiri).
+            var akunKas = '1-1100';
+            if (sumberKas.indexOf('Bank') === 0) akunKas = '1-1200';
+
             var kasRef = db.collection('kasKeluar').doc();
             batch.set(kasRef, {
                 tanggal: Utils.today(),
                 keterangan: 'Pelunasan Hutang: ' + (d.supplier || 'Vendor') + ' (Faktur ' + (d.noFaktur || id.substring(0,6)) + ')',
                 kategori: 'Hutang Usaha',
-                tipeArusKas: 'pelunasan_hutang', // FIX: penanda supaya tidak dobel hitung sbg Biaya Operasional
+                tipeArusKas: 'pelunasan_hutang',
                 jumlah: total,
                 status: 'approved',
                 sumberKas: sumberKas,
+                akunKas: akunKas,
                 referenceId: id,
                 inputOleh: nama,
                 role: role,

@@ -237,35 +237,84 @@ window.AppApotekPembelian = {
             return sum;
         }, 0);
 
-        // FIX: simpan pembelian & update stok dalam satu batch atomik.
-        var batch = db.batch();
+        // Moving Average Perpetual:
+        // pembelian dan pembaruan HPP harus membaca stok + HPP terbaru secara atomik.
+        // Dengan begitu pembelian bersamaan tidak menghitung rata-rata dari data lama.
         var pRef = db.collection('pembelian').doc();
-        batch.set(pRef, {
-            noFaktur: noFaktur,
-            tanggal: tgl,
-            supplier: supplier,
-            metodePembayaran: metode,
-            jatuhTempo: metode === 'kredit' ? jatuhTempo : null,
-            statusPelunasan: metode === 'kredit' ? 'belum_lunas' : 'lunas',
-            items: items,
-            totalHarga: totalHarga,
-            totalPPN: totalPPN,
-            nilaiBersih: totalHarga - totalPPN,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        // FIX (KONSISTENSI STOK GANDA): gabungkan (sum) qty per obatId dulu -- sama
-        // seperti pola yang sudah dipakai di js/apotek/transaksi.js & js/apotek/retur.js
-        // -- untuk jaga-jaga kalau obat yang sama tidak sengaja ditambahkan di lebih
-        // dari satu baris pada satu faktur pembelian.
-        var qtyPerObat = {};
-        items.forEach(function(item) {
-            if (item.qty > 0) qtyPerObat[item.obatId] = (qtyPerObat[item.obatId] || 0) + item.qty;
-        });
-        Object.keys(qtyPerObat).forEach(function(obatId) {
-            var obatRef = db.collection('obat').doc(obatId);
-            batch.update(obatRef, { stok: firebase.firestore.FieldValue.increment(qtyPerObat[obatId]) });
-        });
-        batch.commit().then(() => {
+
+        db.runTransaction(function(tx) {
+            var obatIds = [];
+            items.forEach(function(item) {
+                if (obatIds.indexOf(item.obatId) === -1) obatIds.push(item.obatId);
+            });
+
+            var refs = obatIds.map(function(id) { return db.collection('obat').doc(id); });
+            return Promise.all(refs.map(function(ref) { return tx.get(ref); })).then(function(snaps) {
+                var snapMap = {};
+                snaps.forEach(function(snap, idx) {
+                    if (!snap.exists) throw new Error('Obat tidak ditemukan: ' + obatIds[idx]);
+                    snapMap[obatIds[idx]] = snap;
+                });
+
+                var itemsFinal = items.map(function(item) {
+                    var data = snapMap[item.obatId].data();
+                    var stokLama = parseFloat(data.stok) || 0;
+                    var hppLama = parseFloat(data.hpp) || 0;
+                    var qty = parseFloat(item.qty) || 0;
+                    var hargaBeli = parseFloat(item.hargaBeli) || 0;
+                    var nilaiStokLama = stokLama * hppLama;
+                    var nilaiPembelianNet = hargaBeli * qty;
+
+                    // HPP pembelian menggunakan nilai barang sebelum PPN.
+                    // Untuk barang PPN, hargaBeli input adalah gross faktur.
+                    // PPN Masukan bukan bagian dari biaya persediaan.
+                    if (item.isPPN !== false) {
+                        var ppnItem = Math.round(nilaiPembelianNet - (nilaiPembelianNet / 1.11));
+                        nilaiPembelianNet -= ppnItem;
+                    }
+
+                    var hppBaru = (stokLama + qty) > 0
+                        ? (nilaiStokLama + nilaiPembelianNet) / (stokLama + qty)
+                        : hargaBeli;
+
+                    item.hppSebelum = hppLama;
+                    item.hppSesudah = hppBaru;
+                    item.nilaiPersediaanNet = nilaiPembelianNet;
+                    return item;
+                });
+
+                tx.set(pRef, {
+                    noFaktur: noFaktur,
+                    tanggal: tgl,
+                    supplier: supplier,
+                    metodePembayaran: metode,
+                    jatuhTempo: metode === 'kredit' ? jatuhTempo : null,
+                    statusPelunasan: metode === 'kredit' ? 'belum_lunas' : 'lunas',
+                    items: itemsFinal,
+                    totalHarga: totalHarga,
+                    totalPPN: totalPPN,
+                    nilaiBersih: totalHarga - totalPPN,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                obatIds.forEach(function(obatId) {
+                    var itemRows = itemsFinal.filter(function(item) { return item.obatId === obatId; });
+                    var data = snapMap[obatId].data();
+                    var stokLama = parseFloat(data.stok) || 0;
+                    var nilaiLama = stokLama * (parseFloat(data.hpp) || 0);
+                    var qtyTambah = itemRows.reduce(function(sum, item) { return sum + (parseFloat(item.qty) || 0); }, 0);
+                    var nilaiTambah = itemRows.reduce(function(sum, item) { return sum + (parseFloat(item.nilaiPersediaanNet) || 0); }, 0);
+                    var stokBaru = stokLama + qtyTambah;
+                    var hppBaru = stokBaru > 0 ? (nilaiLama + nilaiTambah) / stokBaru : (parseFloat(data.hpp) || 0);
+
+                    tx.update(db.collection('obat').doc(obatId), {
+                        stok: stokBaru,
+                        hpp: Math.round(hppBaru * 100) / 100,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+            });
+        }).then(function() {
             Utils.toast('Pembelian berhasil disimpan! Stok obat sudah bertambah.', 'success');
             AuditLog.catat({
                 aksi: 'tambah', modul: 'Pembelian Stok', koleksi: 'pembelian', targetId: pRef.id,

@@ -1378,10 +1378,22 @@ window.AppApotekTransaksi = {
                                 stokSaatIni + ', dibutuhkan ' + totalJumlah + '.');
                         }
 
+                        // Ambil HPP rata-rata TERKINI di dalam transaction, bukan dari
+                        // cache form kasir. Ini membuat HPP penjualan konsisten bila ada
+                        // pembelian yang mengubah HPP bersamaan dengan transaksi.
+                        items.forEach(function(item) {
+                            if (item.obatId === obatId) {
+                                item.hargaBeli = parseFloat(snap.data().hpp) || 0;
+                            }
+                        });
+
                         updates.push({ ref: obatRefs[i], stokBaru: stokSaatIni - totalJumlah });
                     }
 
                     // 3) TULIS: simpan transaksi + kurangi stok obat, semua atomik.
+                    // hargaBeli pada item sekarang merupakan HPP moving-average yang
+                    // benar-benar berlaku saat penjualan terjadi.
+                    obj.items = items;
                     tx.set(trxRef, obj);
                     updates.forEach(function(u) {
                         // Tulis nilai absolut hasil validasi (bukan increment lagi),

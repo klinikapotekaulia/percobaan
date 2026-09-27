@@ -249,6 +249,94 @@ window.AppKeuanganAkuntansi = {
                 });
             }
 
+            // Retur tukar barang: catat pembalikan persediaan keluar, PPN,
+            // persediaan barang pengganti, dan perubahan hutang supplier.
+            if (results[10] && results[10].forEach) {
+                results[10].forEach(function(doc) {
+                    var r = doc.data();
+                    if (r.jenisRetur !== 'barang') return;
+
+                    var ket = 'Retur Tukar Barang - ' + (r.supplier || '-');
+                    var nilaiKeluar = parseFloat(r.totalNilaiPersediaanKeluar) || 0;
+                    var nilaiMasuk = parseFloat(r.totalNilaiPersediaanMasuk) || 0;
+                    var ppnKeluar = 0;
+                    var ppnMasuk = 0;
+                    (r.barangKeluar || []).forEach(function(i) {
+                        var gross = (parseFloat(i.qty) || 0) * (parseFloat(i.harga) || 0);
+                        if (i.isPPN !== false) ppnKeluar += Math.round(gross - (gross / 1.11));
+                    });
+                    (r.barangMasuk || []).forEach(function(i) {
+                        ppnMasuk += parseFloat(i.ppnMasuk) || 0;
+                    });
+
+                    // Klaim atas barang yang dikembalikan mengurangi hutang supplier.
+                    var totalKreditPersediaanKeluar = nilaiKeluar + ppnKeluar;
+                    if (totalKreditPersediaanKeluar > 0) {
+                        self.dataJurnal.push({
+                            tanggal: r.tanggal, keterangan: ket + ' - Pengurang Hutang',
+                            akunDebit: '2-1100', akunKredit: '', debit: totalKreditPersediaanKeluar,
+                            kredit: 0, isManual: false, tipeJurnal: 'Otomatis'
+                        });
+                    }
+
+                    if (nilaiKeluar > 0) self.dataJurnal.push({
+                        tanggal: r.tanggal, keterangan: ket + ' - Persediaan Keluar',
+                        akunDebit: '', akunKredit: '1-1400', debit: 0, kredit: nilaiKeluar,
+                        isManual: false, tipeJurnal: 'Otomatis'
+                    });
+                    if (ppnKeluar > 0) self.dataJurnal.push({
+                        tanggal: r.tanggal, keterangan: ket + ' - Pembalikan PPN Masukan',
+                        akunDebit: '', akunKredit: '1-1510', debit: 0, kredit: ppnKeluar,
+                        isManual: false, tipeJurnal: 'Otomatis'
+                    });
+
+                    // Barang pengganti diperlakukan sebagai pembelian stok.
+                    if (nilaiMasuk > 0) self.dataJurnal.push({
+                        tanggal: r.tanggal, keterangan: ket + ' - Persediaan Masuk',
+                        akunDebit: '1-1400', akunKredit: '', debit: nilaiMasuk,
+                        kredit: 0, isManual: false, tipeJurnal: 'Otomatis'
+                    });
+                    if (ppnMasuk > 0) self.dataJurnal.push({
+                        tanggal: r.tanggal, keterangan: ket + ' - PPN Masukan Barang Pengganti',
+                        akunDebit: '1-1510', akunKredit: '', debit: ppnMasuk,
+                        kredit: 0, isManual: false, tipeJurnal: 'Otomatis'
+                    });
+
+                    // Selisih nilai faktur supplier menjadi perubahan hutang supplier.
+                    // Jika nilai barang masuk lebih besar, hutang bertambah; jika lebih kecil,
+                    // hutang berkurang. Selisih HPP vs nilai klaim tetap terlihat sebagai
+                    // laba/rugi penyesuaian persediaan.
+                    var selisihHutang = parseFloat(r.selisih) || 0;
+                    var nilaiNetKeluarFaktur = (parseFloat(r.totalNilaiKeluar) || 0) - ppnKeluar;
+                    var selisihHPPKeluar = nilaiNetKeluarKeluar = 0;
+                    selisihHPPKeluar = nilaiNetKeluarFaktur - nilaiKeluar;
+                    if (selisihHPPKeluar > 0) self.dataJurnal.push({
+                        tanggal: r.tanggal, keterangan: ket + ' - Keuntungan Selisih HPP',
+                        akunDebit: '', akunKredit: '4-1600', debit: 0, kredit: selisihHPPKeluar,
+                        isManual: false, tipeJurnal: 'Otomatis'
+                    });
+                    else if (selisihHPPKeluar < 0) self.dataJurnal.push({
+                        tanggal: r.tanggal, keterangan: ket + ' - Kerugian Selisih HPP',
+                        akunDebit: '5-2600', akunKredit: '', debit: Math.abs(selisihHPPKeluar), kredit: 0,
+                        isManual: false, tipeJurnal: 'Otomatis'
+                    });
+
+                    // Selisih yang dipilih pada retur tetap menjadi hutang/penyelesaian supplier.
+                    // Jurnal kas keluar/mutasi hutang akan menangani pembayaran aktual.
+                    if (selisihHutang !== 0) {
+                        self.dataJurnal.push({
+                            tanggal: r.tanggal,
+                            keterangan: ket + ' - Selisih Supplier',
+                            akunDebit: selisihHutang < 0 ? '2-1100' : '',
+                            akunKredit: selisihHutang > 0 ? '2-1100' : '',
+                            debit: selisihHutang < 0 ? Math.abs(selisihHutang) : 0,
+                            kredit: selisihHutang > 0 ? selisihHutang : 0,
+                            isManual: false, tipeJurnal: 'Otomatis'
+                        });
+                    }
+                });
+            }
+
             // Jurnal Otomatis Pembelian Stok
             results[2].forEach(function(doc) {
                 var b = doc.data();

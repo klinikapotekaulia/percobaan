@@ -246,7 +246,7 @@ window.AppKeuanganAkuntansi = {
                         if (nilai <= 0) return;
                         var ket = 'Penyesuaian Persediaan - Stock Opname - ' + (it.namaObat || it.obatId || '-');
                         if ((it.selisih || 0) > 0) {
-                            self.dataJurnal.push({ tanggal: req.tanggal, keterangan: ket, akunDebit: (it.isPPN ? '1-1410' : '1-1400'), akunKredit: '', debit: nilai, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                            self.dataJurnal.push({ tanggal: req.tanggal, keterangan: ket, akunDebit: (it.isPPN !== false ? '1-1410' : '1-1400'), akunKredit: '', debit: nilai, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
                             self.dataJurnal.push({ tanggal: req.tanggal, keterangan: ket, akunDebit: '', akunKredit: '4-1600', debit: 0, kredit: nilai, isManual: false, tipeJurnal: 'Otomatis' });
                         } else {
                             self.dataJurnal.push({ tanggal: req.tanggal, keterangan: ket, akunDebit: '5-2600', akunKredit: '', debit: nilai, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });

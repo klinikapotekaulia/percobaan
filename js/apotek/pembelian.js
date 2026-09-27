@@ -315,7 +315,6 @@ window.AppApotekPembelian = {
                 });
             });
         }).then(function() {
-        batch.commit().then(() => {
             Utils.toast('Pembelian berhasil disimpan! Stok obat sudah bertambah.', 'success');
             AuditLog.catat({
                 aksi: 'tambah', modul: 'Pembelian Stok', koleksi: 'pembelian', targetId: pRef.id,

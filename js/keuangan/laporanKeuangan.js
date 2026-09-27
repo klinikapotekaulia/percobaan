@@ -401,7 +401,7 @@ window.AppKeuanganLaporanKeuangan = {
         // payroll.js). Untuk data LAMA yang belum punya field ini, fallback ke `kategori` supaya
         // tetap terklasifikasi benar tanpa perlu migrasi data.
         var totalOperasional = 0, totalBeliTunai = 0, totalBeliKredit = 0;
-        var totalBayarHutang = 0, totalTHR = 0;
+        var totalBayarHutang = 0, totalTHR = 0, totalTHRPembayaran = 0;
         var totalPPNMasukan = 0;
 
         this.dataPengeluaran.forEach(function(p) {
@@ -415,7 +415,7 @@ window.AppKeuanganLaporanKeuangan = {
             } else if (tipe === 'gaji_payroll') {
                 // sengaja diabaikan sepenuhnya di sini -- sudah terhitung via totalBebanPayroll
             } else if (tipe === 'thr_payroll') {
-                totalTHR += p.jumlah || 0; // beban riil, dipisah dari "Operasional Lain"
+                totalTHR += p.jumlah || 0; totalTHRPembayaran += p.jumlah || 0; // arus kas THR; beban ditentukan dari pembentukan THR
             } else {
                 totalOperasional += p.jumlah || 0;
             }
@@ -444,7 +444,7 @@ window.AppKeuanganLaporanKeuangan = {
 
         // FITUR BARU: Beban Payroll (Gaji + Tunjangan). Sebelumnya laporan ini SAMA SEKALI tidak
         // memasukkan beban gaji karyawan, sehingga Laba Bersih yang ditampilkan tidak realistis.
-        var totalGajiPokok = 0, totalTunjanganJasa = 0;
+        var totalGajiPokok = 0, totalTunjanganJasa = 0, totalTHRTerbentuk = 0;
         this.dataPayroll.forEach(function(g) {
             var gp = g.gajiPokok || 0;
             // payrollHistory baru menyimpan grossPayroll. Data lama direkonstruksi
@@ -454,6 +454,7 @@ window.AppKeuanganLaporanKeuangan = {
                 : (g.totalGaji || 0) + (g.potKasbon || 0) + (g.potWisata || 0);
             totalGajiPokok += gp;
             totalTunjanganJasa += Math.max(0, gross - gp);
+            totalTHRTerbentuk += g.thrBulanIni || 0;
         });
         var totalBebanPayroll = totalGajiPokok + totalTunjanganJasa;
 
@@ -474,7 +475,8 @@ window.AppKeuanganLaporanKeuangan = {
         var totalKasKeluar = totalOperasional + totalTHR + totalBeliTunai + totalBebanPayroll + totalBayarHutang;
         // FIX: labaBersih TIDAK LAGI mengurangi totalBayarHutang (bukan beban -- lihat catatan di
         // atas). totalTHR tetap dikurangi (memang beban riil), hanya dipisah biar jelas sumbernya.
-        var labaBersih = totalLabaKotor - totalOperasional - totalTHR - totalBebanPayroll + totalPemasukanLain + totalPendapatanLain;
+        var bebanTHR = totalTHRTerbentuk > 0 ? totalTHRTerbentuk : totalTHRPembayaran;
+        var labaBersih = totalLabaKotor - totalOperasional - bebanTHR - totalBebanPayroll + totalPemasukanLain + totalPendapatanLain;
 
         // FITUR BARU: perbandingan omzet dengan bulan sebelumnya (pertumbuhan)
         var omzetBulanLalu = 0;
@@ -520,7 +522,7 @@ window.AppKeuanganLaporanKeuangan = {
             totalModalTindakan: totalModalTindakan,
             cashMasuk: cashMasuk, transferMasuk: transferMasuk, qrisMasuk: qrisMasuk,
             totalOperasional: totalOperasional, totalBeliTunai: totalBeliTunai, totalBeliKredit: totalBeliKredit,
-            totalBayarHutang: totalBayarHutang, totalTHR: totalTHR,
+            totalBayarHutang: totalBayarHutang, totalTHR: bebanTHR, totalTHRTerbentuk: totalTHRTerbentuk, totalTHRPembayaran: totalTHRPembayaran,
             totalGajiPokok: totalGajiPokok, totalTunjanganJasa: totalTunjanganJasa, totalBebanPayroll: totalBebanPayroll,
             totalPemasukanLain: totalPemasukanLain,
             totalPendapatanLain: totalPendapatanLain,

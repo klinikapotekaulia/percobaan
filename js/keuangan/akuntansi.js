@@ -149,7 +149,7 @@ window.AppKeuanganAkuntansi = {
                     });
                 }
 
-                var ppnKeluaran = Math.round(omzetPPNGross - (omzetPPNGross / 1.11));
+                var ppnKeluaran = t.totalPPN !== undefined ? (parseFloat(t.totalPPN) || 0) : Math.round(omzetPPNGross - (omzetPPNGross / 1.11));
                 var omzetPPNNeto = omzetPPNGross - ppnKeluaran;
                 var pendapatanJasa = (t.totalTindakan || 0) + (t.totalRacik || 0) + (t.jasaResep || 0);
                 var kasBank = t.metodeBayar === 'cash' ? '1-1100' : '1-1200';

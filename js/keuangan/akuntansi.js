@@ -9,6 +9,7 @@ window.AppKeuanganAkuntansi = {
         '1-1100': { nama: 'Kas', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1200': { nama: 'Bank / Transfer / QRIS', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1300': { nama: 'Piutang Usaha', kategori: 'Aset', saldoNormal: 'Debit' },
+        '1-1310': { nama: 'Piutang Karyawan (Kasbon)', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1400': { nama: 'Persediaan Obat (Non-PPN)', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1410': { nama: 'Persediaan Obat (PPN 11%)', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1500': { nama: 'Perlengkapan & ATK', kategori: 'Aset', saldoNormal: 'Debit' },
@@ -19,6 +20,7 @@ window.AppKeuanganAkuntansi = {
         '2-1200': { nama: 'Hutang PPN (PPN Keluaran - PPN Masukan)', kategori: 'Kewajiban', saldoNormal: 'Kredit' },
         '2-1300': { nama: 'Hutang Gaji', kategori: 'Kewajiban', saldoNormal: 'Kredit' },
         '2-1400': { nama: 'Kewajiban Lain-lain', kategori: 'Kewajiban', saldoNormal: 'Kredit' },
+        '2-1410': { nama: 'Titipan Potongan Karyawan (Wisata)', kategori: 'Kewajiban', saldoNormal: 'Kredit' },
         '3-1000': { nama: 'Modal Pemilik', kategori: 'Ekuitas', saldoNormal: 'Kredit' },
         '3-2000': { nama: 'Prive Pemilik', kategori: 'Ekuitas', saldoNormal: 'Debit' },
         '3-3000': { nama: 'Laba Ditahan', kategori: 'Ekuitas', saldoNormal: 'Kredit' },
@@ -217,21 +219,31 @@ window.AppKeuanganAkuntansi = {
             // dipakai tanggal terakhir bulan tsb karena payrollHistory tidak menyimpan field 'tanggal'.
             var tglPenggajian = endDate;
             var totalGajiPokokBulan = 0, totalTunjanganJasaBulan = 0, totalKasPayrollBulan = 0;
+            var totalPotKasbonBulan = 0, totalPotWisataBulan = 0;
             results[3].forEach(function(doc) {
                 var g = doc.data();
                 var gajiPokok = g.gajiPokok || 0;
-                var totalGaji = g.totalGaji || 0;
-                // Sisanya (jasa medis, pool resep, tuslah, omzet, uang makan, transport, racik,
-                // tunjangan lain, dikurangi potongan kasbon/wisata) dibukukan sebagai Beban Tunjangan.
-                var tunjanganJasa = totalGaji - gajiPokok;
+                var netPay = g.netPay !== undefined ? g.netPay : (g.totalGaji || 0);
+                var potKasbon = g.potKasbon || 0;
+                var potWisata = g.potWisata || 0;
+                // Beban payroll harus gross. Potongan tidak mengurangi beban:
+                // kasbon mengurangi piutang karyawan, wisata menjadi titipan/kewajiban.
+                var grossPayroll = g.grossPayroll !== undefined
+                    ? g.grossPayroll
+                    : (netPay + potKasbon + potWisata);
+                var tunjanganJasa = grossPayroll - gajiPokok;
 
                 totalGajiPokokBulan += gajiPokok;
                 if (tunjanganJasa > 0) totalTunjanganJasaBulan += tunjanganJasa;
-                totalKasPayrollBulan += totalGaji;
+                totalKasPayrollBulan += netPay;
+                totalPotKasbonBulan += potKasbon;
+                totalPotWisataBulan += potWisata;
             });
             if (totalGajiPokokBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Beban Gaji Pokok Karyawan (' + bulan + ')', akunDebit: '5-2100', akunKredit: '', debit: totalGajiPokokBulan, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
             if (totalTunjanganJasaBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Beban Tunjangan & Jasa Pembagian Hasil (' + bulan + ')', akunDebit: '5-2200', akunKredit: '', debit: totalTunjanganJasaBulan, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
-            if (totalKasPayrollBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Kas Keluar Pembayaran Payroll (' + bulan + ')', akunDebit: '', akunKredit: '1-1100', debit: 0, kredit: totalKasPayrollBulan, isManual: false, tipeJurnal: 'Otomatis' });
+            if (totalKasPayrollBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Kas Keluar Pembayaran Payroll Neto (' + bulan + ')', akunDebit: '', akunKredit: '1-1100', debit: 0, kredit: totalKasPayrollBulan, isManual: false, tipeJurnal: 'Otomatis' });
+            if (totalPotKasbonBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Potongan Kasbon - Piutang Karyawan (' + bulan + ')', akunDebit: '', akunKredit: '1-1310', debit: 0, kredit: totalPotKasbonBulan, isManual: false, tipeJurnal: 'Otomatis' });
+            if (totalPotWisataBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Potongan Wisata - Titipan Karyawan (' + bulan + ')', akunDebit: '', akunKredit: '2-1410', debit: 0, kredit: totalPotWisataBulan, isManual: false, tipeJurnal: 'Otomatis' });
 
             // INTEGRASI: Jurnal Otomatis Pendapatan Lain (modul Pendapatan Lain - sewa, bunga bank,
             // komisi, dll). Dicatat sebagai Kas masuk (Debit 1-1100) & Kredit 4-1500 Pendapatan Lain-lain,

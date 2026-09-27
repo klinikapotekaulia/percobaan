@@ -28,6 +28,7 @@ window.AppKeuanganPayroll = {
     activeTab: 'proses', // 'proses' | 'riwayat' | 'thr'
     dataTHRPembayaran: [],
     dataTHRRekonsiliasi: {},
+    dataTHRPenyisihan: [],
     selectedTargetBulan: null, // 'YYYY-MM'
     selectedCutoffDate: null,  // 'YYYY-MM-DD'
     periodeMap: {},
@@ -245,7 +246,21 @@ window.AppKeuanganPayroll = {
         });
         this._unsubs.push(uTHRPay);
 
-        // Catatan dana THR yang benar-benar disisihkan, terpisah dari kewajiban.
+        // Mutasi dana THR yang benar-benar dipindahkan dari Kas/Bank ke Dana THR.
+        var uTHRPenyisihan = db.collection('thrPenyisihan').onSnapshot(function(snap) {
+            self.dataTHRPenyisihan = [];
+            snap.forEach(function(doc) {
+                var d = doc.data();
+                d.id = doc.id;
+                self.dataTHRPenyisihan.push(d);
+            });
+            if (self.activeTab === 'thr') self.renderTHR();
+        }, function(err) {
+            console.error('Error listening to thrPenyisihan:', err);
+        });
+        self._unsubs.push(uTHRPenyisihan);
+
+        // Catatan dana THR lama dipertahankan untuk kompatibilitas histori.
         var uTHRRecon = db.collection('thrRekonsiliasi').onSnapshot(function(snap) {
             self.dataTHRRekonsiliasi = {};
             snap.forEach(function(doc) {
@@ -942,9 +957,21 @@ window.AppKeuanganPayroll = {
             return sum + (parseFloat(k.thrBulanIni) || 0);
         }, 0);
         var kewajibanProyeksi = saldoTersimpan + thrBulanIni;
-        var recon = (this.dataTHRRekonsiliasi && this.dataTHRRekonsiliasi[this.selectedTargetBulan]) ? this.dataTHRRekonsiliasi[this.selectedTargetBulan] : {};
-        var danaDisisihkan = parseFloat(recon.danaDisisihkan) || 0;
-        var selisih = danaDisisihkan - kewajibanProyeksi;
+
+        var penyisihan = (this.dataTHRPenyisihan || []).filter(function(p) {
+            return (p.status || 'posted') === 'posted';
+        });
+        var saldoDanaTHR = penyisihan.reduce(function(sum, p) {
+            return sum + (parseFloat(p.jumlah) || 0);
+        }, 0);
+        var penyisihanBulanIni = penyisihan.filter(function(p) {
+            return (p.bulan || '').slice(0, 7) === self.selectedTargetBulan;
+        }).reduce(function(sum, p) {
+            return sum + (parseFloat(p.jumlah) || 0);
+        }, 0);
+        var kebutuhanPenyisihan = Math.max(0, kewajibanProyeksi - saldoDanaTHR);
+        var selisihDana = saldoDanaTHR - kewajibanProyeksi;
+
         var pembayaranBulanIni = (this.dataTHRPembayaran || []).filter(function(p) {
             return (p.bulanDibayarkan || '').slice(0, 7) === self.selectedTargetBulan;
         }).reduce(function(sum, p) { return sum + (parseFloat(p.jumlah) || 0); }, 0);
@@ -952,26 +979,31 @@ window.AppKeuanganPayroll = {
         var html = '';
         html += '<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-5">';
         html += '<div class="flex items-start gap-3"><i data-lucide="piggy-bank" class="w-6 h-6 text-amber-600 mt-0.5"></i><div>';
-        html += '<h3 class="font-bold text-amber-900 dark:text-amber-200">Rekonsiliasi Tabungan THR</h3>';
-        html += '<p class="text-xs text-amber-800/80 dark:text-amber-200/80 mt-1">Saldo THR adalah kewajiban karyawan. Dana disisihkan dicatat terpisah dan hanya boleh diisi berdasarkan uang yang benar-benar sudah dipisahkan untuk THR.</p>';
+        html += '<h3 class="font-bold text-amber-900 dark:text-amber-200">Tabungan &amp; Penyisihan THR</h3>';
+        html += '<p class="text-xs text-amber-800/80 dark:text-amber-200/80 mt-1">Sistem menghitung otomatis jumlah dana yang masih perlu disisihkan. Penyisihan memindahkan uang dari Kas/Bank ke Dana THR dan dicatat sebagai mutasi, bukan beban baru.</p>';
         html += '</div></div></div>';
 
-        html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-5">';
+        html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-5">';
         html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">THR Tersimpan</div><div class="text-lg font-bold text-amber-600 mt-1">' + Utils.formatRupiah(saldoTersimpan) + '</div></div>';
-        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">THR Bulan Ini Belum Diposting</div><div class="text-lg font-bold text-blue-600 mt-1">' + Utils.formatRupiah(thrBulanIni) + '</div></div>';
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">THR Bulan Ini</div><div class="text-lg font-bold text-blue-600 mt-1">' + Utils.formatRupiah(thrBulanIni) + '</div></div>';
         html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">Kewajiban Proyeksi</div><div class="text-lg font-bold text-slate-800 dark:text-white mt-1">' + Utils.formatRupiah(kewajibanProyeksi) + '</div></div>';
-        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">Dana Disisihkan</div><div class="text-lg font-bold text-emerald-600 mt-1">' + Utils.formatRupiah(danaDisisihkan) + '</div></div>';
-        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">' + (selisih >= 0 ? 'Kelebihan Dana' : 'Kekurangan Dana') + '</div><div class="text-lg font-bold ' + (selisih >= 0 ? 'text-emerald-600' : 'text-red-600') + ' mt-1">' + Utils.formatRupiah(Math.abs(selisih)) + '</div></div>';
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">Saldo Dana THR</div><div class="text-lg font-bold text-emerald-600 mt-1">' + Utils.formatRupiah(saldoDanaTHR) + '</div></div>';
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">Perlu Disisihkan</div><div class="text-lg font-bold ' + (kebutuhanPenyisihan > 0 ? 'text-red-600' : 'text-emerald-600') + ' mt-1">' + Utils.formatRupiah(kebutuhanPenyisihan) + '</div></div>';
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">' + (selisihDana >= 0 ? 'Kelebihan Dana' : 'Kekurangan Dana') + '</div><div class="text-lg font-bold ' + (selisihDana >= 0 ? 'text-emerald-600' : 'text-red-600') + ' mt-1">' + Utils.formatRupiah(Math.abs(selisihDana)) + '</div></div>';
         html += '</div>';
 
         html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-5 mb-5">';
-        html += '<div class="flex flex-col md:flex-row md:items-end justify-between gap-3">';
-        html += '<div><h3 class="font-bold text-slate-800 dark:text-white">Dana THR yang Benar-benar Disisihkan</h3><p class="text-xs text-slate-500 mt-1">Pencatatan ini bukan pengeluaran baru. Gunakan hanya jika uang memang sudah dipisahkan.</p></div>';
+        html += '<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">';
+        html += '<div><h3 class="font-bold text-slate-800 dark:text-white">Penyisihan Dana THR</h3>';
+        html += '<p class="text-xs text-slate-500 mt-1">Nominal penyisihan dihitung otomatis. Anda hanya memilih sumber uang yang benar-benar dipindahkan.</p>';
+        html += '<p class="text-sm font-bold text-emerald-600 mt-2">Yang perlu disisihkan sekarang: ' + Utils.formatRupiah(kebutuhanPenyisihan) + '</p></div>';
         html += '<div class="flex flex-wrap gap-2 items-end">';
         html += '<div><label class="block text-xs font-semibold text-slate-600 mb-1">Bulan</label><input id="thr-recon-bulan" type="month" value="' + this.selectedTargetBulan + '" onchange="AppKeuanganPayroll.setTargetBulan(this.value)" class="px-3 py-2 border rounded-lg text-sm dark:bg-slate-700 dark:text-white"></div>';
-        html += '<div><label class="block text-xs font-semibold text-slate-600 mb-1">Dana Disisihkan</label><input id="thr-dana-disisihkan" type="number" min="0" value="' + danaDisisihkan + '" class="px-3 py-2 border rounded-lg text-sm text-right dark:bg-slate-700 dark:text-white"></div>';
-        html += '<button onclick="AppKeuanganPayroll.simpanRekonsiliasiTHR()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold">Simpan</button>';
-        html += '</div></div></div>';
+        html += '<div><label class="block text-xs font-semibold text-slate-600 mb-1">Sumber Dana</label><select id="thr-sumber-dana" class="px-3 py-2 border rounded-lg text-sm dark:bg-slate-700 dark:text-white"><option value="1-1100">Kas Utama</option><option value="1-1200">Bank / Transfer / QRIS</option></select></div>';
+        html += '<button onclick="AppKeuanganPayroll.sisihkanDanaTHR()" ' + (kebutuhanPenyisihan <= 0 ? 'disabled' : '') + ' class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold"><i data-lucide="arrow-right-left" class="w-4 h-4 inline-block mr-1"></i> Sisihkan ' + Utils.formatRupiah(kebutuhanPenyisihan) + '</button>';
+        html += '</div></div>';
+        html += '<div class="mt-4 bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-xs text-slate-600 dark:text-slate-300">Setelah dikonfirmasi, sistem mencatat mutasi <strong>Sumber Dana → Dana THR</strong>. Uang tidak dihitung sebagai beban baru; ini hanya pemindahan aset agar saldo Dana THR dapat direkonsiliasi dengan kewajiban.</div>';
+        html += '</div>';
 
         var rows = this.kalkulasiGaji || [];
         html += '<div class="bg-white dark:bg-slate-800 border rounded-xl overflow-hidden mb-5"><div class="p-4 border-b"><h3 class="font-bold text-slate-800 dark:text-white">Saldo THR per Karyawan</h3></div><div class="overflow-x-auto"><table class="w-full text-sm">';
@@ -988,6 +1020,16 @@ window.AppKeuanganPayroll = {
         }
         html += '</tbody></table></div></div>';
 
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl overflow-hidden mb-5"><div class="p-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-slate-800 dark:text-white">Riwayat Penyisihan Dana THR</h3><p class="text-xs text-slate-500">Penyisihan bulan ' + this.selectedTargetBulan + ': ' + Utils.formatRupiah(penyisihanBulanIni) + '</p></div></div><div class="overflow-x-auto"><table class="w-full text-sm">';
+        html += '<thead><tr class="bg-slate-50 dark:bg-slate-900 text-xs uppercase text-slate-500"><th class="px-4 py-3 text-left">Tanggal</th><th class="px-4 py-3 text-left">Sumber</th><th class="px-4 py-3 text-right">Jumlah</th><th class="px-4 py-3 text-left">Keterangan</th></tr></thead><tbody>';
+        var reserves = penyisihan.slice().sort(function(a,b) { return (b.tanggal || '').localeCompare(a.tanggal || ''); });
+        if (!reserves.length) html += '<tr><td colspan="4" class="text-center py-6 text-slate-400">Belum ada penyisihan dana THR.</td></tr>';
+        reserves.slice(0, 50).forEach(function(p) {
+            var sumber = p.akunSumber === '1-1200' ? 'Bank / Transfer / QRIS' : 'Kas Utama';
+            html += '<tr class="border-t dark:border-slate-700"><td class="px-4 py-3">' + Utils.escapeHtml(p.tanggal || '-') + '</td><td class="px-4 py-3">' + sumber + '</td><td class="px-4 py-3 text-right font-semibold">' + Utils.formatRupiah(p.jumlah || 0) + '</td><td class="px-4 py-3">' + Utils.escapeHtml(p.keterangan || '-') + '</td></tr>';
+        });
+        html += '</tbody></table></div></div>';
+
         html += '<div class="bg-white dark:bg-slate-800 border rounded-xl overflow-hidden"><div class="p-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-slate-800 dark:text-white">Pembayaran THR</h3><p class="text-xs text-slate-500">Pembayaran bulan ' + this.selectedTargetBulan + ': ' + Utils.formatRupiah(pembayaranBulanIni) + '</p></div></div><div class="overflow-x-auto"><table class="w-full text-sm">';
         html += '<thead><tr class="bg-slate-50 dark:bg-slate-900 text-xs uppercase text-slate-500"><th class="px-4 py-3 text-left">Tanggal/Bulan</th><th class="px-4 py-3 text-left">Karyawan</th><th class="px-4 py-3 text-right">Jumlah</th><th class="px-4 py-3 text-left">Dibayarkan Oleh</th></tr></thead><tbody>';
         var pays = (this.dataTHRPembayaran || []).slice().sort(function(a,b) { return (b.bulanDibayarkan || '').localeCompare(a.bulanDibayarkan || ''); });
@@ -1001,24 +1043,52 @@ window.AppKeuanganPayroll = {
         lucide.createIcons();
     },
 
-    simpanRekonsiliasiTHR: function() {
+    sisihkanDanaTHR: function() {
         var bulan = this.selectedTargetBulan || Utils.today().slice(0, 7);
-        var input = document.getElementById('thr-dana-disisihkan');
-        if (!input) return;
-        var dana = Math.max(0, parseFloat(input.value) || 0);
-        var self = this;
-        db.collection('thrRekonsiliasi').doc(bulan).set({
+        var sumber = document.getElementById('thr-sumber-dana');
+        var akunSumber = sumber ? sumber.value : '1-1100';
+
+        var saldoTersimpan = Object.keys(this.dataTHR || {}).reduce(function(sum, id) {
+            return sum + (parseFloat(AppKeuanganPayroll.dataTHR[id].saldo) || 0);
+        }, 0);
+        var thrBulanIni = (this.kalkulasiGaji || []).reduce(function(sum, k) {
+            return sum + (parseFloat(k.thrBulanIni) || 0);
+        }, 0);
+        var kewajibanProyeksi = saldoTersimpan + thrBulanIni;
+        var saldoDanaTHR = (this.dataTHRPenyisihan || []).filter(function(p) {
+            return (p.status || 'posted') === 'posted';
+        }).reduce(function(sum, p) { return sum + (parseFloat(p.jumlah) || 0); }, 0);
+        var nominal = Math.max(0, kewajibanProyeksi - saldoDanaTHR);
+
+        if (nominal <= 0) {
+            Utils.toast('Dana THR sudah mencukupi kewajiban proyeksi.', 'info');
+            return;
+        }
+
+        var sumberLabel = akunSumber === '1-1200' ? 'Bank / Transfer / QRIS' : 'Kas Utama';
+        if (!confirm('Sisihkan ' + Utils.formatRupiah(nominal) + ' dari ' + sumberLabel + ' ke Dana THR untuk bulan ' + bulan + '?')) return;
+
+        var ref = db.collection('thrPenyisihan').doc();
+        ref.set({
+            tanggal: Utils.today(),
             bulan: bulan,
-            danaDisisihkan: dana,
-            catatan: 'Dicatat dari modul Rekonsiliasi Tabungan THR',
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedBy: window.currentUserName || 'Keuangan'
-        }, { merge: true }).then(function() {
-            Utils.toast('Catatan dana THR tersimpan.', 'success');
+            akunSumber: akunSumber,
+            akunTujuan: '1-1600',
+            jumlah: nominal,
+            status: 'posted',
+            keterangan: 'Penyisihan otomatis Dana THR',
+            diprosesOleh: window.currentUserName || 'Keuangan',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(function() {
+            Utils.toast('Dana THR sebesar ' + Utils.formatRupiah(nominal) + ' berhasil disisihkan.', 'success');
+            AuditLog.catat({
+                aksi: 'tambah', modul: 'Payroll - THR', koleksi: 'thrPenyisihan', targetId: ref.id,
+                deskripsi: 'Penyisihan Dana THR ' + sumberLabel + ' -> Dana THR', nominal: nominal
+            });
             self.renderTHR();
         }).catch(function(err) {
             console.error(err);
-            Utils.toast('Gagal menyimpan rekonsiliasi THR: ' + err.message, 'error');
+            Utils.toast('Gagal mencatat penyisihan THR: ' + err.message, 'error');
         });
     },
 

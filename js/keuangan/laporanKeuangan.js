@@ -236,7 +236,7 @@ window.AppKeuanganLaporanKeuangan = {
         var cfg = this.configPembagian || {};
         var rekap = this._hitungRekapBulanIniUntukPayroll();
         var rekapDokter = rekap.rekapDokter;
-        var totalGajiPokok = 0, totalTunjanganJasa = 0;
+        var totalGajiPokok = 0, totalTunjanganJasa = 0, totalTHRRealtime = 0;
 
         (this.dataKaryawan || []).forEach(function(k) {
             var depKey = (k.departemen || '').toLowerCase();
@@ -267,6 +267,7 @@ window.AppKeuanganLaporanKeuangan = {
                             var hasilThrK = totalPoolK * ((dc.thrPersenKlinik || 0) / 100);
                             var sisaCashK = totalPoolK - hasilThrK;
                             bagPoolKlinik += sisaCashK * (slotKlinik.persen / 100);
+                            if (slotKlinik.isTHR) totalTHRRealtime += hasilThrK * (slotKlinik.persen / 100);
                         }
                         var slotApotek = (dc.slotKaryApotek || []).find(function(s) { return s.karyawanId === k.id; });
                         if (slotApotek) {
@@ -274,6 +275,7 @@ window.AppKeuanganLaporanKeuangan = {
                             var hasilThrA = totalPoolA * ((dc.thrPersenApotek || 0) / 100);
                             var sisaCashA = totalPoolA - hasilThrA;
                             bagPoolApotek += sisaCashA * (slotApotek.persen / 100);
+                            if (slotApotek.isTHR) totalTHRRealtime += hasilThrA * (slotApotek.persen / 100);
                         }
                     }
                 });
@@ -287,6 +289,7 @@ window.AppKeuanganLaporanKeuangan = {
                 var hasilThrTK = rekap.totalTuslahKlinik * (persenThrTindakanKlinik / 100);
                 var sisaCashTK = rekap.totalTuslahKlinik - hasilThrTK;
                 bagTuslah += (sisaCashTK * mySlotTindakanKlinik.persen) / 100;
+                if (mySlotTindakanKlinik.isTHR) totalTHRRealtime += (hasilThrTK * mySlotTindakanKlinik.persen) / 100;
             }
             var slotsTindakanApotek = self._slotArr(cfg.tindakanApotek);
             var persenThrTindakanApotek = self._persenTHR(cfg.tindakanApotek);
@@ -295,19 +298,28 @@ window.AppKeuanganLaporanKeuangan = {
                 var hasilThrTA = rekap.totalTuslahApotek * (persenThrTindakanApotek / 100);
                 var sisaCashTA = rekap.totalTuslahApotek - hasilThrTA;
                 bagTuslah += (sisaCashTA * mySlotTindakanApotek.persen) / 100;
+                if (mySlotTindakanApotek.isTHR) totalTHRRealtime += (hasilThrTA * mySlotTindakanApotek.persen) / 100;
             }
 
             var bagOmzet = 0;
             if (cfg.tunjanganOmzet && cfg.tunjanganOmzet.persen > 0) {
                 var poolOmzet = (rekap.totalLabaObat * cfg.tunjanganOmzet.persen) / 100;
                 var mySlotOmzet = self._slotArr(cfg.tunjanganOmzet).find(function(s) { return s.karyawanId === k.id; });
-                if (mySlotOmzet) bagOmzet = (poolOmzet * mySlotOmzet.persen) / 100;
+                if (mySlotOmzet) {
+                    var hasilThrOmz = poolOmzet * (self._persenTHR(cfg.tunjanganOmzet) / 100);
+                    bagOmzet = ((poolOmzet - hasilThrOmz) * mySlotOmzet.persen) / 100;
+                    if (mySlotOmzet.isTHR) totalTHRRealtime += (hasilThrOmz * mySlotOmzet.persen) / 100;
+                }
             }
 
             var bagUM = 0;
             if (cfg.uangMakan) {
                 var mySlotUM = self._slotArr(cfg.uangMakan).find(function(s) { return s.karyawanId === k.id; });
-                if (mySlotUM) bagUM = (rekap.totalPembulatan * mySlotUM.persen) / 100;
+                if (mySlotUM) {
+                    var hasilThrUM = rekap.totalPembulatan * (self._persenTHR(cfg.uangMakan) / 100);
+                    bagUM = ((rekap.totalPembulatan - hasilThrUM) * mySlotUM.persen) / 100;
+                    if (mySlotUM.isTHR) totalTHRRealtime += (hasilThrUM * mySlotUM.persen) / 100;
+                }
             }
 
             var bagTransport = 0;
@@ -319,14 +331,18 @@ window.AppKeuanganLaporanKeuangan = {
             var bagRacik = 0;
             if (cfg.racikObat) {
                 var mySlotRacik = self._slotArr(cfg.racikObat).find(function(s) { return s.karyawanId === k.id; });
-                if (mySlotRacik) bagRacik = (rekap.totalNilaiRacik * mySlotRacik.persen) / 100;
+                if (mySlotRacik) {
+                    var hasilThrRacik = rekap.totalNilaiRacik * (self._persenTHR(cfg.racikObat) / 100);
+                    bagRacik = ((rekap.totalNilaiRacik - hasilThrRacik) * mySlotRacik.persen) / 100;
+                    if (mySlotRacik.isTHR) totalTHRRealtime += (hasilThrRacik * mySlotRacik.persen) / 100;
+                }
             }
 
             totalGajiPokok += gajiPokok;
             totalTunjanganJasa += jasaMedis + jasaDokter + jasaResepLuar + bagPoolKlinik + bagPoolApotek + bagTuslah + bagOmzet + bagUM + bagTransport + bagRacik;
         });
 
-        return { totalGajiPokok: totalGajiPokok, totalTunjanganJasa: totalTunjanganJasa, total: totalGajiPokok + totalTunjanganJasa };
+        return { totalGajiPokok: totalGajiPokok, totalTunjanganJasa: totalTunjanganJasa, totalTHR: totalTHRRealtime, total: totalGajiPokok + totalTunjanganJasa + totalTHRRealtime };
     },
 
     renderReport: function() {

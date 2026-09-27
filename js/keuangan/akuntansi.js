@@ -186,22 +186,66 @@ window.AppKeuanganAkuntansi = {
                 }
             });
 
-            // Jurnal Otomatis Retur Supplier (retur uang): stok keluar dari persediaan
-            // dan pengembalian dari supplier bukan pendapatan baru.
+            // Jurnal Otomatis Retur Supplier.
+            // Nilai persediaan yang keluar harus memakai HPP moving-average saat
+            // retur benar-benar dikonfirmasi, bukan harga beli/refund supplier.
             if (results[10] && results[10].forEach) {
                 results[10].forEach(function(doc) {
                     var r = doc.data();
-                    if (r.jenisRetur !== 'uang') return;
-                    var nominal = parseFloat(r.totalNilai) || 0;
-                    if (nominal <= 0) return;
                     var ketRetur = 'Retur Supplier - ' + (r.namaObat || r.supplier || '-');
-                    // Retur dikonfirmasi belum berarti supplier sudah mengembalikan uang.
-                    // Yang berkurang adalah persediaan dan hak pengurang hutang supplier.
-                    var ppnRetur = r.isPPN ? Math.round(nominal - (nominal / 1.11)) : 0;
-                    var nilaiPersediaanRetur = nominal - ppnRetur;
-                    self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur, akunDebit: '2-1100', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
-                    if (nilaiPersediaanRetur > 0) self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur + ' - Persediaan', akunDebit: '', akunKredit: r.isPPN ? '1-1410' : '1-1400', debit: 0, kredit: nilaiPersediaanRetur, isManual: false, tipeJurnal: 'Otomatis' });
-                    if (ppnRetur > 0) self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur + ' - PPN Masukan', akunDebit: '', akunKredit: '1-1510', debit: 0, kredit: ppnRetur, isManual: false, tipeJurnal: 'Otomatis' });
+
+                    if (r.jenisRetur === 'uang') {
+                        var nominal = parseFloat(r.totalNilai) || 0;
+                        if (nominal <= 0) return;
+
+                        var ppnRetur = r.isPPN ? Math.round(nominal - (nominal / 1.11)) : 0;
+                        var nilaiPersediaanRetur = r.nilaiPersediaanRetur !== undefined
+                            ? (parseFloat(r.nilaiPersediaanRetur) || 0)
+                            : (nominal - ppnRetur);
+
+                        // Hak pengurang hutang supplier diakui saat retur dikonfirmasi,
+                        // walaupun kas/refund belum benar-benar diterima.
+                        self.dataJurnal.push({
+                            tanggal: r.tanggal, keterangan: ketRetur,
+                            akunDebit: '2-1100', akunKredit: '',
+                            debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis'
+                        });
+
+                        if (nilaiPersediaanRetur > 0) {
+                            self.dataJurnal.push({
+                                tanggal: r.tanggal, keterangan: ketRetur + ' - Persediaan',
+                                akunDebit: '', akunKredit: r.isPPN ? '1-1410' : '1-1400',
+                                debit: 0, kredit: nilaiPersediaanRetur, isManual: false, tipeJurnal: 'Otomatis'
+                            });
+                        }
+
+                        if (ppnRetur > 0) {
+                            self.dataJurnal.push({
+                                tanggal: r.tanggal, keterangan: ketRetur + ' - PPN Masukan',
+                                akunDebit: '', akunKredit: '1-1510',
+                                debit: 0, kredit: ppnRetur, isManual: false, tipeJurnal: 'Otomatis'
+                            });
+                        }
+
+                        // Karena moving average dapat berbeda dari harga faktur yang
+                        // direfund supplier, selisih carrying value vs nilai retur
+                        // harus terlihat sebagai laba/rugi penyesuaian persediaan.
+                        var totalKreditRetur = nilaiPersediaanRetur + ppnRetur;
+                        var selisihRetur = nominal - totalKreditRetur;
+                        if (selisihRetur > 0) {
+                            self.dataJurnal.push({
+                                tanggal: r.tanggal, keterangan: ketRetur + ' - Keuntungan Selisih HPP',
+                                akunDebit: '', akunKredit: '4-1600',
+                                debit: 0, kredit: selisihRetur, isManual: false, tipeJurnal: 'Otomatis'
+                            });
+                        } else if (selisihRetur < 0) {
+                            self.dataJurnal.push({
+                                tanggal: r.tanggal, keterangan: ketRetur + ' - Kerugian Selisih HPP',
+                                akunDebit: '5-2600', akunKredit: '',
+                                debit: Math.abs(selisihRetur), kredit: 0, isManual: false, tipeJurnal: 'Otomatis'
+                            });
+                        }
+                    }
                 });
             }
 

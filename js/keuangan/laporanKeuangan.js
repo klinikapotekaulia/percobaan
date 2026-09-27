@@ -528,7 +528,8 @@ window.AppKeuanganLaporanKeuangan = {
         });
         daftarHutangJatuhTempo.forEach(function(h) { hutangJatuhTempoBulanIni += h.totalHarga || 0; });
 
-        var labaBersihBayangan = totalLabaKotor - totalOperasional - totalTHR - payrollRealtime.total + totalPemasukanLain + totalPendapatanLain;
+        var bebanTHRBayanganLegacy = totalTHRTerbentuk > 0 ? 0 : totalTHRPembayaran;
+        var labaBersihBayangan = totalLabaKotor - totalOperasional - payrollRealtime.total - bebanTHRBayanganLegacy + totalPemasukanLain + totalPendapatanLain;
         var selisihVsResmi = labaBersihBayangan - labaBersih; // kewajiban yg blm cair tapi sudah kehitung di sini
 
         // Simpan ringkasan supaya bisa dipakai fungsi export tanpa hitung ulang

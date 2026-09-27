@@ -13,6 +13,7 @@ window.AppKeuanganAkuntansi = {
         '1-1400': { nama: 'Persediaan Obat (Non-PPN)', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1410': { nama: 'Persediaan Obat (PPN 11%)', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1500': { nama: 'Perlengkapan & ATK', kategori: 'Aset', saldoNormal: 'Debit' },
+        '1-1600': { nama: 'Dana Disisihkan THR', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1510': { nama: 'PPN Masukan Dapat Dikreditkan', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-2100': { nama: 'Peralatan Medis', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-2200': { nama: 'Peralatan Apotek & Furniture', kategori: 'Aset', saldoNormal: 'Debit' },
@@ -114,9 +115,10 @@ window.AppKeuanganAkuntansi = {
         // di halamannya sendiri.
         var pPendapatanLain = db.collection('pendapatanLain').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get();
         var pMutasi = db.collection('mutasiRekening').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
+        var pTHRPenyisihan = db.collection('thrPenyisihan').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
         var pTHRPembayaran = db.collection('thrPembayaranHistory').where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(new Date(startDate + 'T00:00:00'))).where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(new Date(endDate + 'T23:59:59'))).get().catch(function() { return []; });
 
-        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi, pTHRPembayaran]).then(function(results) {
+        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi, pTHRPembayaran, pTHRPenyisihan]).then(function(results) {
             self.dataJurnal = [];
             self.dataSaldoAwal = [];
             // MEMO (bukan bagian jurnal resmi): simpan transaksi mentah bulan berjalan supaya
@@ -251,6 +253,21 @@ window.AppKeuanganAkuntansi = {
             if (totalPotKasbonBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Potongan Kasbon - Piutang Karyawan (' + bulan + ')', akunDebit: '', akunKredit: '1-1310', debit: 0, kredit: totalPotKasbonBulan, isManual: false, tipeJurnal: 'Otomatis' });
             if (totalPotWisataBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Potongan Wisata - Titipan Karyawan (' + bulan + ')', akunDebit: '', akunKredit: '2-1410', debit: 0, kredit: totalPotWisataBulan, isManual: false, tipeJurnal: 'Otomatis' });
             if (totalTHRTerbentukBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Pembentukan Kewajiban THR (' + bulan + ')', akunDebit: '5-2200', akunKredit: '2-1500', debit: totalTHRTerbentukBulan, kredit: totalTHRTerbentukBulan, isManual: false, tipeJurnal: 'Otomatis' });
+
+            // Penyisihan Dana THR: pemindahan aset dari Kas/Bank ke Dana THR.
+            // Bukan beban baru; saldo Dana THR tampil sebagai aset khusus dan berkurang saat digunakan.
+            if (results[9] && results[9].forEach) {
+                results[9].forEach(function(doc) {
+                    var p = doc.data();
+                    var nominal = p.jumlah || 0;
+                    if (nominal <= 0) return;
+                    var akunSumber = p.akunSumber === '1-1200' ? '1-1200' : '1-1100';
+                    var tgl = p.tanggal || endDate;
+                    var ket = 'Penyisihan Dana THR - ' + (p.keterangan || 'Pemindahan dana THR');
+                    self.dataJurnal.push({ tanggal: tgl, keterangan: ket, akunDebit: '1-1600', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                    self.dataJurnal.push({ tanggal: tgl, keterangan: ket, akunDebit: '', akunKredit: akunSumber, debit: 0, kredit: nominal, isManual: false, tipeJurnal: 'Otomatis' });
+                });
+            }
 
             // Pencairan THR: mengurangi kewajiban THR, bukan beban baru.
             results[8].forEach(function(doc) {

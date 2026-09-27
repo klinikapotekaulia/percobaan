@@ -600,6 +600,7 @@ window.AppApotekRetur = {
                 satuan: obat ? (obat.satuan || '') : '',
                 qty: qty,
                 harga: harga,
+                isPPN: obat ? obat.isPPN !== false : true,
                 subtotal: qty * harga
             });
         });

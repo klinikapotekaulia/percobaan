@@ -121,8 +121,10 @@ window.AppKeuanganAkuntansi = {
         var pTHRPenyisihan = db.collection('thrPenyisihan').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
         var pTHRPembayaran = db.collection('thrPembayaranHistory').where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(new Date(startDate + 'T00:00:00'))).where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(new Date(endDate + 'T23:59:59'))).get().catch(function() { return []; });
         var pStockOpname = db.collection('stockOpnameHistory').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
+        // Snapshot nilai seluruh aset obat yang sedang berada di stok.
+        var pObatMaster = db.collection('obat').get().catch(function() { return []; });
 
-        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi, pTHRPembayaran, pTHRPenyisihan, pRetur, pStockOpname]).then(function(results) {
+        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi, pTHRPembayaran, pTHRPenyisihan, pRetur, pStockOpname, pObatMaster]).then(function(results) {
             self.dataJurnal = [];
             self.dataSaldoAwal = [];
             // MEMO (bukan bagian jurnal resmi): simpan transaksi mentah bulan berjalan supaya
@@ -130,6 +132,47 @@ window.AppKeuanganAkuntansi = {
             // lihat penjelasan di renderLabaRugi().
             self.dataTransaksiBulanIni = [];
             results[0].forEach(function(doc) { var d = doc.data(); self.dataTransaksiBulanIni.push(d); });
+
+            // CATATAN ASET PERSEDIAAN OBAT:
+            // Satu dokumen per hari menyimpan seluruh detail obat, stok, HPP moving-average,
+            // dan nilai aset stok. Ini menjadi titik rekonsiliasi stok fisik -> nilai persediaan.
+            if (results[12] && results[12].forEach) {
+                var snapshotItems = [];
+                var totalNilaiPersediaanObat = 0;
+                results[12].forEach(function(doc) {
+                    var o = doc.data();
+                    var stok = parseFloat(o.stok) || 0;
+                    var hpp = parseFloat(o.hpp) || 0;
+                    var nilai = stok * hpp;
+                    if (stok !== 0 || hpp !== 0) {
+                        snapshotItems.push({
+                            obatId: doc.id,
+                            kodeObat: o.kodeObat || '',
+                            namaObat: o.namaObat || '-',
+                            isPPN: o.isPPN !== false,
+                            stok: stok,
+                            hpp: hpp,
+                            nilaiPersediaan: Math.round(nilai * 100) / 100
+                        });
+                        totalNilaiPersediaanObat += nilai;
+                    }
+                });
+
+                var tanggalSnapshot = Utils.today();
+                db.collection('persediaanSnapshot').doc(tanggalSnapshot).set({
+                    tanggal: tanggalSnapshot,
+                    totalItem: snapshotItems.length,
+                    totalQty: snapshotItems.reduce(function(sum, i) { return sum + i.stok; }, 0),
+                    totalNilaiPersediaan: Math.round(totalNilaiPersediaanObat * 100) / 100,
+                    metodePenilaian: 'Moving Average Perpetual',
+                    sumber: 'Master obat saat modul Akuntansi dimuat',
+                    items: snapshotItems,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedBy: window.currentUserName || 'Keuangan'
+                }, { merge: true }).catch(function(err) {
+                    console.warn('Gagal mencatat snapshot persediaan:', err);
+                });
+            }
 
             // FIX #2: Saldo Awal dipisah, tidak masuk dataJurnal
             results[5].forEach(function(doc) {

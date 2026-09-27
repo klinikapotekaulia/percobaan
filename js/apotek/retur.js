@@ -1018,6 +1018,7 @@ window.AppApotekRetur = {
                             keterangan: 'Selisih diterima dari ' + retur.supplier + ' (retur tukar barang)',
                             jumlah: Math.abs(selisih),
                             status: 'approved',
+                            jenisArusKas: 'retur_supplier',
                             referenceId: id,
                             inputOleh: window.currentUserName || 'Admin',
                             createdAt: firebase.firestore.FieldValue.serverTimestamp()

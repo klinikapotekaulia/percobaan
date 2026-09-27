@@ -29,6 +29,15 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Deploy Firestore Rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          npx firebase-tools deploy --only firestore:rules --project klinikapotekaulia-61641
+          rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
+
       - name: Deploy to Firebase Hosting (Aulia Testing)
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:

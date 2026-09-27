@@ -496,6 +496,7 @@ window.AppApotekRetur = {
             satuan:     obat.satuan || '',
             qty:        qty,
             hargaBeli:  harga,
+            isPPN:      obat.isPPN !== false,
             totalNilai: qty * harga,
             alasan:     alasan,
             status:     'menunggu_konfirmasi',

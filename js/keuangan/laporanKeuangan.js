@@ -383,12 +383,11 @@ window.AppKeuanganLaporanKeuangan = {
             totalRacik += (t.totalRacik || 0);
             totalJasaResep += (t.jasaResep || 0);
             totalPembulatan += (t.pembulatan || 0);
-            totalLabaKotor += (omzetObat - ppn - hppObat) + (t.totalRacik || 0) + (t.totalTindakan || 0) - modalTindakan + (t.jasaResep || 0) + (t.pembulatan || 0);
 
-            // Hitung atau ambil PPN Keluaran
+            // PPN keluaran harus dihitung sebelum laba kotor agar PPN tidak menjadi pendapatan.
             var ppn = 0;
             if (t.totalPPN !== undefined) {
-                ppn = t.totalPPN;
+                ppn = parseFloat(t.totalPPN) || 0;
             } else if (t.items) {
                 t.items.forEach(function(item) {
                     if (item.isPPN !== false) {
@@ -398,6 +397,8 @@ window.AppKeuanganLaporanKeuangan = {
                 });
             }
             totalPPNKeluaran += ppn;
+
+            totalLabaKotor += (omzetObat - ppn - hppObat) + (t.totalRacik || 0) + (t.totalTindakan || 0) - modalTindakan + (t.jasaResep || 0) + (t.pembulatan || 0);
             totalPendapatanNet += (omzetObat + (t.totalRacik || 0) + (t.totalTindakan || 0) + (t.jasaResep || 0) + (t.pembulatan || 0)) - ppn;
 
             if (t.metodeBayar === 'cash') cashMasuk += t.totalAkhir || 0;

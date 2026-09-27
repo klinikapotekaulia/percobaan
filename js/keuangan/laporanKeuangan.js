@@ -447,9 +447,13 @@ window.AppKeuanganLaporanKeuangan = {
         var totalGajiPokok = 0, totalTunjanganJasa = 0;
         this.dataPayroll.forEach(function(g) {
             var gp = g.gajiPokok || 0;
-            var tot = g.totalGaji || 0;
+            // payrollHistory baru menyimpan grossPayroll. Data lama direkonstruksi
+            // dari net pay + potongan agar histori tetap dapat diaudit tanpa migrasi.
+            var gross = g.grossPayroll !== undefined
+                ? g.grossPayroll
+                : (g.totalGaji || 0) + (g.potKasbon || 0) + (g.potWisata || 0);
             totalGajiPokok += gp;
-            totalTunjanganJasa += Math.max(0, tot - gp);
+            totalTunjanganJasa += Math.max(0, gross - gp);
         });
         var totalBebanPayroll = totalGajiPokok + totalTunjanganJasa;
 

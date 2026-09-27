@@ -196,7 +196,13 @@ window.AppKeuanganDashboardKeuangan = {
         r.beliBulan.forEach(function(b) { pembelianStok += (b.totalHarga || b.nominal || 0); });
 
         var gajiBulan = 0;
-        r.gaji.forEach(function(g) { gajiBulan += (g.totalGaji || g.totalTerima || g.gajiBersih || g.total || 0); });
+        r.gaji.forEach(function(g) {
+            // Beban payroll memakai gross, bukan net pay setelah potongan.
+            // Fallback menjaga histori lama tetap terbaca.
+            gajiBulan += g.grossPayroll !== undefined
+                ? g.grossPayroll
+                : ((g.totalGaji || g.totalTerima || g.gajiBersih || g.total || 0) + (g.potKasbon || 0) + (g.potWisata || 0));
+        });
 
         // FIX: pakai hppBulan (modal obat yang TERJUAL), bukan pembelianStok (nilai BELI), sebagai
         // komponen beban dalam perhitungan Laba Rugi. Beban THR ditambahkan eksplisit (dulu

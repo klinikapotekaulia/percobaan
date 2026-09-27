@@ -595,12 +595,14 @@ window.AppKeuanganPayroll = {
             var bagTuslah = 0, thrTuslah = 0;
             var slotsTindakanKlinik = self._slotArr(cfg.tindakanKlinik);
             var thrPctKlinik        = self._persenTHR(cfg.tindakanKlinik);
-            // Tuslah Klinik hanya untuk karyawan departemen Klinik.
-            // Dokter tidak ikut skema Tuslah Klinik meskipun masih ada di slot konfigurasi.
-            var slotTK = (depKey === 'klinik') ? slotsTindakanKlinik.find(function(s) { return s.karyawanId === k.id; }) : null;
-            if (slotTK && (slotTK.persen || 0) > 0 && rekapAbsensiKlinik.totalTuslahKlinik > 0) {
-                var hasilThrTK = rekapAbsensiKlinik.totalTuslahKlinik * (thrPctKlinik / 100);
-                var sisaCashTK = rekapAbsensiKlinik.totalTuslahKlinik - hasilThrTK;
+            // Tuslah Klinik dapat diterima karyawan Klinik dan Dokter.
+            // Untuk Klinik, hanya hari hadir yang dihitung. Dokter tidak memakai
+            // skema absensi Klinik sehingga memakai rekap transaksi penuh.
+            var slotTK = (depKey === 'klinik' || depKey === 'dokter') ? slotsTindakanKlinik.find(function(s) { return s.karyawanId === k.id; }) : null;
+            var rekapTuslahTK = depKey === 'klinik' ? rekapAbsensiKlinik : rekap;
+            if (slotTK && (slotTK.persen || 0) > 0 && rekapTuslahTK.totalTuslahKlinik > 0) {
+                var hasilThrTK = rekapTuslahTK.totalTuslahKlinik * (thrPctKlinik / 100);
+                var sisaCashTK = rekapTuslahTK.totalTuslahKlinik - hasilThrTK;
                 bagTuslah += (sisaCashTK * (slotTK.persen || 0)) / 100;
                 if (slotTK.isTHR) thrTuslah += (hasilThrTK * (slotTK.persen || 0)) / 100;
             }

@@ -25,7 +25,9 @@ window.AppKeuanganPayroll = {
     psaReal: null,
 
     // State Periode & Navigasi Tab
-    activeTab: 'proses', // 'proses' | 'riwayat'
+    activeTab: 'proses', // 'proses' | 'riwayat' | 'thr'
+    dataTHRPembayaran: [],
+    dataTHRRekonsiliasi: {},
     selectedTargetBulan: null, // 'YYYY-MM'
     selectedCutoffDate: null,  // 'YYYY-MM-DD'
     periodeMap: {},
@@ -62,6 +64,7 @@ window.AppKeuanganPayroll = {
         html += '<div class="flex border-b border-slate-200 dark:border-slate-700 mb-6 gap-2 text-sm font-semibold">';
         html += '  <button onclick="AppKeuanganPayroll.switchTab(\'proses\')" id="tab-btn-proses" class="' + (this.activeTab === 'proses' ? 'border-b-2 border-primary-600 text-primary-600 dark:text-primary-400 pb-2.5 px-3 flex items-center gap-2' : 'text-slate-500 pb-2.5 px-3 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2') + '"><i data-lucide="calculator" class="w-4 h-4"></i> Proses Payroll</button>';
         html += '  <button onclick="AppKeuanganPayroll.switchTab(\'riwayat\')" id="tab-btn-riwayat" class="' + (this.activeTab === 'riwayat' ? 'border-b-2 border-primary-600 text-primary-600 dark:text-primary-400 pb-2.5 px-3 flex items-center gap-2' : 'text-slate-500 pb-2.5 px-3 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2') + '"><i data-lucide="history" class="w-4 h-4"></i> Riwayat &amp; Laporan Payroll</button>';
+        html += '  <button onclick="AppKeuanganPayroll.switchTab(\'thr\')" id="tab-btn-thr" class="' + (this.activeTab === 'thr' ? 'border-b-2 border-amber-500 text-amber-600 dark:text-amber-400 pb-2.5 px-3 flex items-center gap-2' : 'text-slate-500 pb-2.5 px-3 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2') + '"><i data-lucide="piggy-bank" class="w-4 h-4"></i> Tabungan THR</button>';
         html += '</div>';
 
         html += '  <div id="payroll-content"><div class="flex justify-center py-20"><div class="spinner"></div></div></div>';
@@ -74,14 +77,22 @@ window.AppKeuanganPayroll = {
         var btnProses = document.getElementById('tab-btn-proses');
         var btnRiwayat = document.getElementById('tab-btn-riwayat');
         if (btnProses && btnRiwayat) {
+            var btnTHR = document.getElementById('tab-btn-thr');
             if (tab === 'proses') {
                 btnProses.className = 'border-b-2 border-primary-600 text-primary-600 dark:text-primary-400 pb-2.5 px-3 flex items-center gap-2';
                 btnRiwayat.className = 'text-slate-500 pb-2.5 px-3 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2';
+                if (btnTHR) btnTHR.className = 'text-slate-500 pb-2.5 px-3 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2';
                 this.renderTable();
-            } else {
+            } else if (tab === 'riwayat') {
                 btnRiwayat.className = 'border-b-2 border-primary-600 text-primary-600 dark:text-primary-400 pb-2.5 px-3 flex items-center gap-2';
                 btnProses.className = 'text-slate-500 pb-2.5 px-3 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2';
+                if (btnTHR) btnTHR.className = 'text-slate-500 pb-2.5 px-3 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2';
                 this.loadRiwayat();
+            } else {
+                btnProses.className = 'text-slate-500 pb-2.5 px-3 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2';
+                btnRiwayat.className = 'text-slate-500 pb-2.5 px-3 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2';
+                if (btnTHR) btnTHR.className = 'border-b-2 border-amber-500 text-amber-600 dark:text-amber-400 pb-2.5 px-3 flex items-center gap-2';
+                this.renderTHR();
             }
         } else {
             this.init();
@@ -141,8 +152,10 @@ window.AppKeuanganPayroll = {
             self._calcTimer = setTimeout(function() {
                 if (self.activeTab === 'proses') {
                     self.hitungPayroll();
-                } else {
+                } else if (self.activeTab === 'riwayat') {
                     self.loadRiwayat();
+                } else {
+                    self.renderTHR();
                 }
             }, 120);
         };
@@ -217,6 +230,32 @@ window.AppKeuanganPayroll = {
             console.error('Error listening to thrTabungan:', err);
         });
         this._unsubs.push(uTHR);
+
+        // Listener riwayat pembayaran THR untuk rekonsiliasi.
+        var uTHRPay = db.collection('thrPembayaranHistory').onSnapshot(function(snap) {
+            self.dataTHRPembayaran = [];
+            snap.forEach(function(doc) {
+                var d = doc.data();
+                d.id = doc.id;
+                self.dataTHRPembayaran.push(d);
+            });
+            if (self.activeTab === 'thr') self.renderTHR();
+        }, function(err) {
+            console.error('Error listening to thrPembayaranHistory:', err);
+        });
+        this._unsubs.push(uTHRPay);
+
+        // Catatan dana THR yang benar-benar disisihkan, terpisah dari kewajiban.
+        var uTHRRecon = db.collection('thrRekonsiliasi').onSnapshot(function(snap) {
+            self.dataTHRRekonsiliasi = {};
+            snap.forEach(function(doc) {
+                self.dataTHRRekonsiliasi[doc.id] = doc.data();
+            });
+            if (self.activeTab === 'thr') self.renderTHR();
+        }, function(err) {
+            console.error('Error listening to thrRekonsiliasi:', err);
+        });
+        self._unsubs.push(uTHRRecon);
     },
 
     _setupDataListeners: function(earliestMulai, scheduleCalculate) {
@@ -265,7 +304,11 @@ window.AppKeuanganPayroll = {
         }
         this.defaultAwalBulan = yyyyMM + '-01';
         this.periodeSampaiGlobal = this.selectedCutoffDate;
-        this.hitungPayroll();
+        if (this.activeTab === 'thr') {
+            this.renderTHR();
+        } else {
+            this.hitungPayroll();
+        }
     },
 
     setCutoffDate: function(dateStr) {
@@ -885,6 +928,98 @@ window.AppKeuanganPayroll = {
 
         container.innerHTML = html;
         lucide.createIcons();
+    },
+
+    renderTHR: function() {
+        var container = document.getElementById('payroll-content');
+        if (!container) return;
+
+        var self = this;
+        var saldoTersimpan = Object.keys(this.dataTHR || {}).reduce(function(sum, id) {
+            return sum + (parseFloat(self.dataTHR[id].saldo) || 0);
+        }, 0);
+        var thrBulanIni = (this.kalkulasiGaji || []).reduce(function(sum, k) {
+            return sum + (parseFloat(k.thrBulanIni) || 0);
+        }, 0);
+        var kewajibanProyeksi = saldoTersimpan + thrBulanIni;
+        var recon = (this.dataTHRRekonsiliasi && this.dataTHRRekonsiliasi[this.selectedTargetBulan]) ? this.dataTHRRekonsiliasi[this.selectedTargetBulan] : {};
+        var danaDisisihkan = parseFloat(recon.danaDisisihkan) || 0;
+        var selisih = danaDisisihkan - kewajibanProyeksi;
+        var pembayaranBulanIni = (this.dataTHRPembayaran || []).filter(function(p) {
+            return (p.bulanDibayarkan || '').slice(0, 7) === self.selectedTargetBulan;
+        }).reduce(function(sum, p) { return sum + (parseFloat(p.jumlah) || 0); }, 0);
+
+        var html = '';
+        html += '<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-5">';
+        html += '<div class="flex items-start gap-3"><i data-lucide="piggy-bank" class="w-6 h-6 text-amber-600 mt-0.5"></i><div>';
+        html += '<h3 class="font-bold text-amber-900 dark:text-amber-200">Rekonsiliasi Tabungan THR</h3>';
+        html += '<p class="text-xs text-amber-800/80 dark:text-amber-200/80 mt-1">Saldo THR adalah kewajiban karyawan. Dana disisihkan dicatat terpisah dan hanya boleh diisi berdasarkan uang yang benar-benar sudah dipisahkan untuk THR.</p>';
+        html += '</div></div></div>';
+
+        html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-5">';
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">THR Tersimpan</div><div class="text-lg font-bold text-amber-600 mt-1">' + Utils.formatRupiah(saldoTersimpan) + '</div></div>';
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">THR Bulan Ini Belum Diposting</div><div class="text-lg font-bold text-blue-600 mt-1">' + Utils.formatRupiah(thrBulanIni) + '</div></div>';
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">Kewajiban Proyeksi</div><div class="text-lg font-bold text-slate-800 dark:text-white mt-1">' + Utils.formatRupiah(kewajibanProyeksi) + '</div></div>';
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">Dana Disisihkan</div><div class="text-lg font-bold text-emerald-600 mt-1">' + Utils.formatRupiah(danaDisisihkan) + '</div></div>';
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-4"><div class="text-xs text-slate-500">' + (selisih >= 0 ? 'Kelebihan Dana' : 'Kekurangan Dana') + '</div><div class="text-lg font-bold ' + (selisih >= 0 ? 'text-emerald-600' : 'text-red-600') + ' mt-1">' + Utils.formatRupiah(Math.abs(selisih)) + '</div></div>';
+        html += '</div>';
+
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl p-5 mb-5">';
+        html += '<div class="flex flex-col md:flex-row md:items-end justify-between gap-3">';
+        html += '<div><h3 class="font-bold text-slate-800 dark:text-white">Dana THR yang Benar-benar Disisihkan</h3><p class="text-xs text-slate-500 mt-1">Pencatatan ini bukan pengeluaran baru. Gunakan hanya jika uang memang sudah dipisahkan.</p></div>';
+        html += '<div class="flex flex-wrap gap-2 items-end">';
+        html += '<div><label class="block text-xs font-semibold text-slate-600 mb-1">Bulan</label><input id="thr-recon-bulan" type="month" value="' + this.selectedTargetBulan + '" onchange="AppKeuanganPayroll.setTargetBulan(this.value)" class="px-3 py-2 border rounded-lg text-sm dark:bg-slate-700 dark:text-white"></div>';
+        html += '<div><label class="block text-xs font-semibold text-slate-600 mb-1">Dana Disisihkan</label><input id="thr-dana-disisihkan" type="number" min="0" value="' + danaDisisihkan + '" class="px-3 py-2 border rounded-lg text-sm text-right dark:bg-slate-700 dark:text-white"></div>';
+        html += '<button onclick="AppKeuanganPayroll.simpanRekonsiliasiTHR()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold">Simpan</button>';
+        html += '</div></div></div>';
+
+        var rows = this.kalkulasiGaji || [];
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl overflow-hidden mb-5"><div class="p-4 border-b"><h3 class="font-bold text-slate-800 dark:text-white">Saldo THR per Karyawan</h3></div><div class="overflow-x-auto"><table class="w-full text-sm">';
+        html += '<thead><tr class="bg-slate-50 dark:bg-slate-900 text-xs uppercase text-slate-500"><th class="px-4 py-3 text-left">Karyawan</th><th class="px-4 py-3 text-right">Saldo Tersimpan</th><th class="px-4 py-3 text-right">THR Bulan Ini</th><th class="px-4 py-3 text-right">Proyeksi Setelah Payroll</th></tr></thead><tbody>';
+        if (!rows.length) {
+            html += '<tr><td colspan="4" class="text-center py-6 text-slate-400">Belum ada data payroll.</td></tr>';
+        } else {
+            rows.forEach(function(k) {
+                html += '<tr class="border-t dark:border-slate-700"><td class="px-4 py-3"><div class="font-medium text-slate-800 dark:text-white">' + Utils.escapeHtml(k.nama) + '</div><div class="text-xs text-slate-400">' + Utils.escapeHtml(k.departemen || '-') + '</div></td>';
+                html += '<td class="px-4 py-3 text-right">' + Utils.formatRupiah(k.thrSaldoSebelum || 0) + '</td>';
+                html += '<td class="px-4 py-3 text-right text-blue-600">' + Utils.formatRupiah(k.thrBulanIni || 0) + '</td>';
+                html += '<td class="px-4 py-3 text-right font-bold text-amber-600">' + Utils.formatRupiah((k.thrSaldoSebelum || 0) + (k.thrBulanIni || 0)) + '</td></tr>';
+            });
+        }
+        html += '</tbody></table></div></div>';
+
+        html += '<div class="bg-white dark:bg-slate-800 border rounded-xl overflow-hidden"><div class="p-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-slate-800 dark:text-white">Pembayaran THR</h3><p class="text-xs text-slate-500">Pembayaran bulan ' + this.selectedTargetBulan + ': ' + Utils.formatRupiah(pembayaranBulanIni) + '</p></div></div><div class="overflow-x-auto"><table class="w-full text-sm">';
+        html += '<thead><tr class="bg-slate-50 dark:bg-slate-900 text-xs uppercase text-slate-500"><th class="px-4 py-3 text-left">Tanggal/Bulan</th><th class="px-4 py-3 text-left">Karyawan</th><th class="px-4 py-3 text-right">Jumlah</th><th class="px-4 py-3 text-left">Dibayarkan Oleh</th></tr></thead><tbody>';
+        var pays = (this.dataTHRPembayaran || []).slice().sort(function(a,b) { return (b.bulanDibayarkan || '').localeCompare(a.bulanDibayarkan || ''); });
+        if (!pays.length) html += '<tr><td colspan="4" class="text-center py-6 text-slate-400">Belum ada riwayat pembayaran THR.</td></tr>';
+        pays.slice(0, 50).forEach(function(p) {
+            html += '<tr class="border-t dark:border-slate-700"><td class="px-4 py-3">' + Utils.escapeHtml(p.bulanDibayarkan || '-') + '</td><td class="px-4 py-3">' + Utils.escapeHtml(p.namaKaryawan || '-') + '</td><td class="px-4 py-3 text-right font-semibold">' + Utils.formatRupiah(p.jumlah || 0) + '</td><td class="px-4 py-3">' + Utils.escapeHtml(p.dibayarkanOleh || '-') + '</td></tr>';
+        });
+        html += '</tbody></table></div></div>';
+
+        container.innerHTML = html;
+        lucide.createIcons();
+    },
+
+    simpanRekonsiliasiTHR: function() {
+        var bulan = this.selectedTargetBulan || Utils.today().slice(0, 7);
+        var input = document.getElementById('thr-dana-disisihkan');
+        if (!input) return;
+        var dana = Math.max(0, parseFloat(input.value) || 0);
+        var self = this;
+        db.collection('thrRekonsiliasi').doc(bulan).set({
+            bulan: bulan,
+            danaDisisihkan: dana,
+            catatan: 'Dicatat dari modul Rekonsiliasi Tabungan THR',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy: window.currentUserName || 'Keuangan'
+        }, { merge: true }).then(function() {
+            Utils.toast('Catatan dana THR tersimpan.', 'success');
+            self.renderTHR();
+        }).catch(function(err) {
+            console.error(err);
+            Utils.toast('Gagal menyimpan rekonsiliasi THR: ' + err.message, 'error');
+        });
     },
 
     updateTotal: function(idx) {

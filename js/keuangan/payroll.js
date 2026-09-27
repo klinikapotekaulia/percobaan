@@ -1044,6 +1044,7 @@ window.AppKeuanganPayroll = {
     },
 
     sisihkanDanaTHR: function() {
+        var self = this;
         var bulan = this.selectedTargetBulan || Utils.today().slice(0, 7);
         var sumber = document.getElementById('thr-sumber-dana');
         var akunSumber = sumber ? sumber.value : '1-1100';

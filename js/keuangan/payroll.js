@@ -342,6 +342,17 @@ window.AppKeuanganPayroll = {
         return rawId || null;
     },
 
+    _getSkemaDokter: function(karyawanId) {
+        var self = this;
+        var list = (this.configPembagian && Array.isArray(this.configPembagian.resepKlinik))
+            ? this.configPembagian.resepKlinik
+            : [];
+        return list.find(function(dc) {
+            var dokId = self._matchDokterId(dc.dokterId, dc.namaDokter);
+            return dokId === karyawanId || dc.dokterId === karyawanId;
+        }) || null;
+    },
+
     _mulaiKaryawan: function(karyawanId) {
         var p = this.periodeMap[karyawanId];
         return (p && p.mulai) ? p.mulai : this.defaultAwalBulan;
@@ -384,7 +395,7 @@ window.AppKeuanganPayroll = {
                 var dokId = self._matchDokterId(t.dokterId, t.namaDokter);
                 if (dokId) {
                     if (!rekapDokter[dokId]) {
-                        rekapDokter[dokId] = { jmlResepKlinik: 0, jasaResepLuar: 0 };
+                        rekapDokter[dokId] = { jmlResepKlinik: 0, jasaResepLuar: 0, jmlResepLuar: 0 };
                     }
                     rekapDokter[dokId].jmlResepKlinik += 1;
                 }
@@ -429,14 +440,15 @@ window.AppKeuanganPayroll = {
             if (t.tipe === 'resep_klinik' && (t.dokterId || t.namaDokter)) {
                 var dokId = self._matchDokterId(t.dokterId, t.namaDokter);
                 if (dokId) {
-                    if (!rekapDokter[dokId]) rekapDokter[dokId] = { jmlResepKlinik: 0, jasaResepLuar: 0 };
+                    if (!rekapDokter[dokId]) rekapDokter[dokId] = { jmlResepKlinik: 0, jasaResepLuar: 0, jmlResepLuar: 0 };
                     rekapDokter[dokId].jmlResepKlinik += 1;
                 }
             } else if (t.tipe === 'resep_luar' && (t.dokterId || t.dokterLuar || t.namaDokter)) {
                 var dokIdL = self._matchDokterId(t.dokterId, t.dokterLuar || t.namaDokter);
                 if (dokIdL) {
-                    if (!rekapDokter[dokIdL]) rekapDokter[dokIdL] = { jmlResepKlinik: 0, jasaResepLuar: 0 };
+                    if (!rekapDokter[dokIdL]) rekapDokter[dokIdL] = { jmlResepKlinik: 0, jasaResepLuar: 0, jmlResepLuar: 0 };
                     rekapDokter[dokIdL].jasaResepLuar += (t.jasaResep || 0);
+                    rekapDokter[dokIdL].jmlResepLuar += 1;
                 }
             }
             if (t.tipe === 'resep_luar') jmlResepLuar++;
@@ -545,20 +557,21 @@ window.AppKeuanganPayroll = {
             });
             var hadir = Object.keys(hadirDates).length;
 
-            // Jasa Medis (JM) & Jasa Dokter (JD)
+            // Bagian dokter harus bersumber dari SATU skema dokter di Pembagian Hasil.
+            // JM/JD mengikuti tarif pada skema dokter tersebut.
+            // Jasa Resep Luar mengikuti "Potongan Dokter" pada Pembagian Hasil,
+            // bukan nilai jasa yang tersimpan di transaksi.
             var jasaMedis = 0, jasaDokter = 0, jasaResepLuar = 0;
-            if (rekapDokter[k.id]) {
+            var skemaDokter = depKey === 'dokter' ? self._getSkemaDokter(k.id) : null;
+            if (depKey === 'dokter' && skemaDokter) {
+                var rekapDokterK = rekapDokter[k.id] || { jmlResepKlinik: 0, jasaResepLuar: 0, jmlResepLuar: 0 };
+                jasaMedis = (skemaDokter.jm || 0) * (rekapDokterK.jmlResepKlinik || 0);
+                jasaDokter = (skemaDokter.jd || 0) * (rekapDokterK.jmlResepKlinik || 0);
+                var potonganDokter = cfg.resepLuar ? (cfg.resepLuar.potonganDokter || 0) : 0;
+                jasaResepLuar = potonganDokter * (rekapDokterK.jmlResepLuar || 0);
+            } else if (rekapDokter[k.id]) {
+                // Dipertahankan untuk kompatibilitas data lama non-dokter.
                 jasaResepLuar = rekapDokter[k.id].jasaResepLuar || 0;
-                if (cfg.resepKlinik && Array.isArray(cfg.resepKlinik)) {
-                    var docConfig = cfg.resepKlinik.find(function(dc) {
-                        var matchedId = self._matchDokterId(dc.dokterId, dc.namaDokter);
-                        return matchedId === k.id || dc.dokterId === k.id;
-                    });
-                    if (docConfig && rekapDokter[k.id].jmlResepKlinik > 0) {
-                        jasaMedis = (docConfig.jm || 0) * rekapDokter[k.id].jmlResepKlinik;
-                        jasaDokter = (docConfig.jd || 0) * rekapDokter[k.id].jmlResepKlinik;
-                    }
-                }
             }
 
             // Bagian Pool Resep (Klinik & Apotek)
@@ -588,7 +601,10 @@ window.AppKeuanganPayroll = {
                         }
 
                         var slotsApo = dc.slotKaryApotek || dc.poolApotek || [];
-                        var slotApo = slotsApo.find(function(s) { return s.karyawanId === k.id; });
+                        // Pool Apotek hanya untuk karyawan departemen Apotek.
+                        // Dokter tidak boleh menerima pool karyawan meskipun ID-nya
+                        // masih tersimpan pada konfigurasi lama.
+                        var slotApo = (depKey === 'apotek') ? slotsApo.find(function(s) { return s.karyawanId === k.id; }) : null;
                         if (slotApo) {
                             var totalPoolA = (dc.poolKaryApotek || 0) * jmlResepApotek;
                             var hasilThrA = totalPoolA * ((dc.thrPersenApotek || 0) / 100);

@@ -192,8 +192,13 @@ window.AppKeuanganAkuntansi = {
                     var nominal = parseFloat(r.totalNilai) || 0;
                     if (nominal <= 0) return;
                     var ketRetur = 'Retur Supplier - ' + (r.namaObat || r.supplier || '-');
-                    self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur, akunDebit: '1-1100', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
-                    self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur, akunDebit: '', akunKredit: r.isPPN ? '1-1410' : '1-1400', debit: 0, kredit: nominal, isManual: false, tipeJurnal: 'Otomatis' });
+                    // Retur dikonfirmasi belum berarti supplier sudah mengembalikan uang.
+                    // Yang berkurang adalah persediaan dan hak pengurang hutang supplier.
+                    var ppnRetur = r.isPPN ? Math.round(nominal - (nominal / 1.11)) : 0;
+                    var nilaiPersediaanRetur = nominal - ppnRetur;
+                    self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur, akunDebit: '2-1100', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                    if (nilaiPersediaanRetur > 0) self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur + ' - Persediaan', akunDebit: '', akunKredit: r.isPPN ? '1-1410' : '1-1400', debit: 0, kredit: nilaiPersediaanRetur, isManual: false, tipeJurnal: 'Otomatis' });
+                    if (ppnRetur > 0) self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur + ' - PPN Masukan', akunDebit: '', akunKredit: '1-1510', debit: 0, kredit: ppnRetur, isManual: false, tipeJurnal: 'Otomatis' });
                 });
             }
 

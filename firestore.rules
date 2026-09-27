@@ -251,6 +251,8 @@ service cloud.firestore {
     match /thrPembayaranHistory/{id} { allow read, write: if isAdminKeuangan() || hasRole(['psa']); }
     // Rekonsiliasi Tabungan THR: hanya keuangan/admin/PSA yang boleh melihat atau mencatat dana THR yang benar-benar disisihkan.
     match /thrRekonsiliasi/{id} { allow read, write: if isAdminKeuangan() || hasRole(['psa']); }
+    // Mutasi nyata penyisihan dana THR dari Kas/Bank ke Dana THR.
+    match /thrPenyisihan/{id} { allow read, write: if isAdminKeuangan() || hasRole(['psa']); }
     // BARU: pemasukan non-penjualan (mis. uang/kembalian yang DITERIMA dari supplier
     // saat retur tukar barang dikonfirmasi, selisih<0 & caraSelisih='tunai' —
     // lihat js/apotek/retur.js konfirmasiBarang()). Dipakai oleh

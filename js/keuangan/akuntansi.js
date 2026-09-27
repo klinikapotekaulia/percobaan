@@ -213,7 +213,7 @@ window.AppKeuanganAkuntansi = {
                 var p = doc.data();
                 
                 // FIX #5: Skip gaji & tunjangan di kasKeluar agar tidak double dengan penggajian
-                if (p.kategori === 'gaji' || p.kategori === 'tunjangan' || p.tipeArusKas === 'thr_payroll') return; 
+                if (p.kategori === 'gaji' || p.kategori === 'tunjangan' || p.tipeArusKas === 'thr_payroll' || p.tipeArusKas === 'thr_payroll_dana_thr') return; 
                 
                 var akunDebit = p.akunDebit || '5-2300'; // Gunakan akun debit yang dipilih, default ke 5-2300 (Beban Operasional)
                 self.dataJurnal.push({ tanggal: p.tanggal, keterangan: p.keterangan, akunDebit: akunDebit, akunKredit: '', debit: p.jumlah || 0, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
@@ -254,26 +254,35 @@ window.AppKeuanganAkuntansi = {
             if (totalPotWisataBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Potongan Wisata - Titipan Karyawan (' + bulan + ')', akunDebit: '', akunKredit: '2-1410', debit: 0, kredit: totalPotWisataBulan, isManual: false, tipeJurnal: 'Otomatis' });
             if (totalTHRTerbentukBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Pembentukan Kewajiban THR (' + bulan + ')', akunDebit: '5-2200', akunKredit: '2-1500', debit: totalTHRTerbentukBulan, kredit: totalTHRTerbentukBulan, isManual: false, tipeJurnal: 'Otomatis' });
 
-            // Penyisihan Dana THR: pemindahan aset dari Kas/Bank ke Dana THR.
-            // Bukan beban baru; saldo Dana THR tampil sebagai aset khusus dan berkurang saat digunakan.
+            // Mutasi Dana THR: penyisihan menambah aset 1-1600, pembayaran menguranginya.
+            // Penyisihan = Debit Dana THR, Kredit Kas/Bank.
+            // Pembayaran = Debit Hutang THR, Kredit Dana THR.
             if (results[9] && results[9].forEach) {
                 results[9].forEach(function(doc) {
                     var p = doc.data();
-                    var nominal = p.jumlah || 0;
+                    var nominal = Math.abs(parseFloat(p.jumlah) || 0);
                     if (nominal <= 0) return;
-                    var akunSumber = p.akunSumber === '1-1200' ? '1-1200' : '1-1100';
+                    var jenis = p.jenis || 'penyisihan';
                     var tgl = p.tanggal || endDate;
-                    var ket = 'Penyisihan Dana THR - ' + (p.keterangan || 'Pemindahan dana THR');
-                    self.dataJurnal.push({ tanggal: tgl, keterangan: ket, akunDebit: '1-1600', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
-                    self.dataJurnal.push({ tanggal: tgl, keterangan: ket, akunDebit: '', akunKredit: akunSumber, debit: 0, kredit: nominal, isManual: false, tipeJurnal: 'Otomatis' });
+                    if (jenis === 'pembayaran' || p.arah === 'keluar') {
+                        var ketBayarDana = 'Pembayaran THR dari Dana THR - ' + (p.namaKaryawan || '-');
+                        self.dataJurnal.push({ tanggal: tgl, keterangan: ketBayarDana, akunDebit: '2-1500', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                        self.dataJurnal.push({ tanggal: tgl, keterangan: ketBayarDana, akunDebit: '', akunKredit: '1-1600', debit: 0, kredit: nominal, isManual: false, tipeJurnal: 'Otomatis' });
+                    } else {
+                        var akunSumber = p.akunSumber === '1-1200' ? '1-1200' : '1-1100';
+                        var ket = 'Penyisihan Dana THR - ' + (p.keterangan || 'Pemindahan dana THR');
+                        self.dataJurnal.push({ tanggal: tgl, keterangan: ket, akunDebit: '1-1600', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                        self.dataJurnal.push({ tanggal: tgl, keterangan: ket, akunDebit: '', akunKredit: akunSumber, debit: 0, kredit: nominal, isManual: false, tipeJurnal: 'Otomatis' });
+                    }
                 });
             }
 
-            // Pencairan THR: mengurangi kewajiban THR, bukan beban baru.
+            // Histori pembayaran THR dipakai untuk rekonsiliasi. Jurnal pembayaran sudah
+            // dibuat dari mutasi thrPenyisihan agar aset Dana THR otomatis berkurang satu kali.
             results[8].forEach(function(doc) {
                 var h = doc.data();
                 var nominal = h.jumlah || 0;
-                if (nominal > 0) {
+                if (nominal > 0 && h.sumberDana !== '1-1600') {
                     var tgl = h.tanggalBayar || (h.createdAt && h.createdAt.toDate ? h.createdAt.toDate().toISOString().slice(0, 10) : endDate);
                     self.dataJurnal.push({ tanggal: tgl, keterangan: 'Pembayaran THR - ' + (h.namaKaryawan || '-'), akunDebit: '2-1500', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
                     self.dataJurnal.push({ tanggal: tgl, keterangan: 'Kas Keluar Pembayaran THR', akunDebit: '', akunKredit: '1-1100', debit: 0, kredit: nominal, isManual: false, tipeJurnal: 'Otomatis' });

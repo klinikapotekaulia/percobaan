@@ -137,6 +137,7 @@ window.AppApotekStockOpname = {
                     stokSistem: o.stok || 0, stokFisik: o.stokFisik,
                     selisih: o.stokFisik - (o.stok || 0),
                     nilaiSelisih: (o.stokFisik - (o.stok || 0)) * (o.hpp || 0),
+                    isPPN: o.isPPN !== false,
                     satuan: o.satuan || '-'
                 });
             }
@@ -240,45 +241,72 @@ window.AppApotekStockOpname = {
         var req = this.requests.find(r => r.id === reqId);
         if(!req) return;
 
-        if(!confirm('Setujui pengajuan ini? Stok sistem akan otomatis diperbarui.')) return;
+        if(!confirm('Setujui pengajuan ini? Stok sistem akan divalidasi ulang sebelum diperbarui.')) return;
 
-        Utils.toast('Memproses update stok...', 'info');
-        var batch = db.batch();
+        Utils.toast('Memvalidasi & memproses update stok...', 'info');
 
-        // 1. Update stok master obat — gunakan delta (increment selisih) supaya
-        //    transaksi/pembelian yg terjadi setelah pengajuan tidak ditimpa.
-        req.items.forEach(function(it) {
-            var ref = db.collection('obat').doc(it.obatId);
-            var delta = (typeof it.selisih === 'number') ? it.selisih : ((it.stokFisik || 0) - (it.stokSistem || 0));
-            batch.update(ref, {
-                stok: firebase.firestore.FieldValue.increment(delta),
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        // Validasi ulang dengan transaction:
+        // bila stok berubah sejak opname diajukan, jangan menerapkan delta lama
+        // karena hasil fisik sudah tidak merepresentasikan stok terkini.
+        db.runTransaction(function(tx) {
+            var reqRef = db.collection('stockOpnameRequests').doc(reqId);
+            return tx.get(reqRef).then(function(reqSnap) {
+                if(!reqSnap.exists) throw new Error('Pengajuan opname tidak ditemukan.');
+                var currentReq = reqSnap.data();
+                if(currentReq.status !== 'pending') {
+                    throw new Error('Pengajuan opname sudah diproses sebelumnya.');
+                }
+
+                var refs = (currentReq.items || []).map(function(it) {
+                    return db.collection('obat').doc(it.obatId);
+                });
+
+                return Promise.all(refs.map(function(ref) { return tx.get(ref); })).then(function(snaps) {
+                    var items = currentReq.items || [];
+                    snaps.forEach(function(snap, idx) {
+                        if(!snap.exists) throw new Error('Obat tidak ditemukan: ' + (items[idx].namaObat || items[idx].obatId));
+                        var it = items[idx];
+                        var stokSekarang = parseFloat(snap.data().stok) || 0;
+                        var stokSaatPengajuan = parseFloat(it.stokSistem) || 0;
+                        if(stokSekarang !== stokSaatPengajuan) {
+                            throw new Error('Stok "' + (it.namaObat || it.obatId) + '" sudah berubah dari ' +
+                                stokSaatPengajuan + ' menjadi ' + stokSekarang +
+                                '. Lakukan opname ulang sebelum approval.');
+                        }
+                    });
+
+                    items.forEach(function(it, idx) {
+                        var stokFisik = parseFloat(it.stokFisik) || 0;
+                        tx.update(refs[idx], {
+                            stok: stokFisik,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    });
+
+                    tx.update(reqRef, {
+                        status: 'approved',
+                        approvedBy: window.currentUserName || 'Admin',
+                        approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    var histRef = db.collection('stockOpnameHistory').doc();
+                    tx.set(histRef, {
+                        tanggal: currentReq.tanggal || Utils.today(),
+                        totalItem: currentReq.totalItem,
+                        items: items,
+                        requestId: reqId,
+                        approvedBy: window.currentUserName || 'Admin',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
             });
-        });
-
-        // 2. Update status pengajuan jadi approved
-        var reqRef = db.collection('stockOpnameRequests').doc(reqId);
-        batch.update(reqRef, { 
-            status: 'approved', 
-            approvedBy: window.currentUserName || 'Admin',
-            approvedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        // 3. Catat ke history
-        var histRef = db.collection('stockOpnameHistory').doc();
-        batch.set(histRef, {
-            tanggal: req.tanggal || (req.createdAt && req.createdAt.seconds ? Utils.dateStr(new Date(req.createdAt.seconds*1000)) : Utils.today()), // FIX: pakai tanggal lokal, bukan UTC
-            totalItem: req.totalItem,
-            items: req.items,
-            approvedBy: window.currentUserName || 'Admin',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        batch.commit().then(function() {
-            Utils.toast('Pengajuan disetujui & stok diupdate!', 'success');
+        }).then(function() {
+            Utils.toast('Pengajuan disetujui & stok disesuaikan!', 'success');
             Utils.closeModal();
             self.loadRequests();
-        }).catch(err => Utils.toast('Gagal: ' + err.message, 'error'));
+        }).catch(function(err) {
+            Utils.toast('Approval dibatalkan: ' + err.message, 'error');
+        });
     },
 
     rejectReq: function(reqId) {

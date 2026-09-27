@@ -192,8 +192,13 @@ window.AppKeuanganAkuntansi = {
                     var nominal = parseFloat(r.totalNilai) || 0;
                     if (nominal <= 0) return;
                     var ketRetur = 'Retur Supplier - ' + (r.namaObat || r.supplier || '-');
-                    self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur, akunDebit: '1-1100', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
-                    self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur, akunDebit: '', akunKredit: r.isPPN ? '1-1410' : '1-1400', debit: 0, kredit: nominal, isManual: false, tipeJurnal: 'Otomatis' });
+                    // Retur dikonfirmasi belum berarti supplier sudah mengembalikan uang.
+                    // Yang berkurang adalah persediaan dan hak pengurang hutang supplier.
+                    var ppnRetur = r.isPPN ? Math.round(nominal - (nominal / 1.11)) : 0;
+                    var nilaiPersediaanRetur = nominal - ppnRetur;
+                    self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur, akunDebit: '2-1100', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                    if (nilaiPersediaanRetur > 0) self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur + ' - Persediaan', akunDebit: '', akunKredit: r.isPPN ? '1-1410' : '1-1400', debit: 0, kredit: nilaiPersediaanRetur, isManual: false, tipeJurnal: 'Otomatis' });
+                    if (ppnRetur > 0) self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur + ' - PPN Masukan', akunDebit: '', akunKredit: '1-1510', debit: 0, kredit: ppnRetur, isManual: false, tipeJurnal: 'Otomatis' });
                 });
             }
 
@@ -209,33 +214,46 @@ window.AppKeuanganAkuntansi = {
                     });
                 }
                 
-                // FIX #4: PPN Masukan dihitung dari Harga Beli (Gross)
-                var ppnMasukan = Math.round(valPPNGross - (valPPNGross / 1.11));
+                // Gunakan PPN yang tersimpan di faktur pembelian agar pembulatan konsisten.
+                var ppnMasukan = b.totalPPN !== undefined
+                    ? (parseFloat(b.totalPPN) || 0)
+                    : Math.round(valPPNGross - (valPPNGross / 1.11));
                 var valPersediaanPPN = valPPNGross - ppnMasukan;
 
-                if (valNonPPN > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'Beli Stok Non-PPN', akunDebit: '1-1400', akunKredit: '', debit: valNonPPN, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
-                if (valPersediaanPPN > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'Beli Stok PPN', akunDebit: '1-1410', akunKredit: '', debit: valPersediaanPPN, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
-                if (ppnMasukan > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'PPN Masukan', akunDebit: '1-1510', akunKredit: '', debit: ppnMasukan, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                if (b.sumberHutang === 'manual') {
+                    var akunDebitManual = b.akunDebitHutang || '5-2300';
+                    self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'Pengakuan Hutang ' + (b.kategori || 'Lain-lain'), akunDebit: akunDebitManual, akunKredit: '', debit: b.totalHarga || 0, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                } else {
+                    if (valNonPPN > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'Beli Stok Non-PPN', akunDebit: '1-1400', akunKredit: '', debit: valNonPPN, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                    if (valPersediaanPPN > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'Beli Stok PPN', akunDebit: '1-1410', akunKredit: '', debit: valPersediaanPPN, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                    if (ppnMasukan > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'PPN Masukan', akunDebit: '1-1510', akunKredit: '', debit: ppnMasukan, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                }
 
-                // FIX: koleksi pembelian memakai field `metodePembayaran` ('tunai'/'kredit') & `totalHarga`,
-                //      bukan `metodeBayar`/`totalTagihan`. Sebelumnya semua pembelian salah diakui sbg Bank.
                 var akunKredit = b.metodePembayaran === 'kredit' ? '2-1100' : (b.metodePembayaran === 'tunai' ? '1-1100' : '1-1200');
-                self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'Pembayaran ke Supplier', akunDebit: '', akunKredit: akunKredit, debit: 0, kredit: b.totalHarga || 0, isManual: false, tipeJurnal: 'Otomatis' });
+                self.dataJurnal.push({ tanggal: b.tanggal, keterangan: b.metodePembayaran === 'kredit' ? 'Pengakuan Hutang Supplier' : 'Pembayaran ke Supplier', akunDebit: '', akunKredit: akunKredit, debit: 0, kredit: b.totalHarga || 0, isManual: false, tipeJurnal: 'Otomatis' });
             });
 
             // Jurnal Otomatis Pengeluaran Kas
             results[1].forEach(function(doc) {
                 var p = doc.data();
                 
-                // FIX #5: Skip gaji & tunjangan di kasKeluar agar tidak double dengan penggajian
-                if (p.kategori === 'gaji' || p.kategori === 'tunjangan' || p.tipeArusKas === 'thr_payroll' || p.tipeArusKas === 'thr_payroll_dana_thr') return; 
-                
-                var akunDebit = p.akunDebit || '5-2300'; // Gunakan akun debit yang dipilih, default ke 5-2300 (Beban Operasional)
+                // Payroll/THR sudah dijurnal lewat sumber khususnya.
+                if (p.kategori === 'gaji' || p.kategori === 'tunjangan' || p.tipeArusKas === 'thr_payroll' || p.tipeArusKas === 'thr_payroll_dana_thr') return;
+
+                if (p.tipeArusKas === 'pelunasan_hutang') {
+                    var akunKasHutang = p.akunKas || '1-1100';
+                    self.dataJurnal.push({ tanggal: p.tanggal, keterangan: p.keterangan, akunDebit: '2-1100', akunKredit: '', debit: p.jumlah || 0, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                    self.dataJurnal.push({ tanggal: p.tanggal, keterangan: 'Kas/Bank Keluar - Pelunasan Hutang', akunDebit: '', akunKredit: akunKasHutang, debit: 0, kredit: p.jumlah || 0, isManual: false, tipeJurnal: 'Otomatis' });
+                    return;
+                }
+
+                var akunDebit = p.akunDebit || '5-2300';
+                var akunKreditKas = p.akunKas || '1-1100';
                 self.dataJurnal.push({ tanggal: p.tanggal, keterangan: p.keterangan, akunDebit: akunDebit, akunKredit: '', debit: p.jumlah || 0, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
-                self.dataJurnal.push({ tanggal: p.tanggal, keterangan: 'Kas Keluar', akunDebit: '', akunKredit: '1-1100', debit: 0, kredit: p.jumlah || 0, isManual: false, tipeJurnal: 'Otomatis' });
+                self.dataJurnal.push({ tanggal: p.tanggal, keterangan: 'Kas Keluar', akunDebit: '', akunKredit: akunKreditKas, debit: 0, kredit: p.jumlah || 0, isManual: false, tipeJurnal: 'Otomatis' });
             });
 
-            // Jurnal Otomatis Penggajian
+            // Jurnal Otomatis Penggajian            // Jurnal Otomatis Penggajian
             // FIX STRUKTUR DATA: payrollHistory menyimpan SATU dokumen per karyawan per bulan
             // (field: gajiPokok, totalGaji, dst — bukan array 'dataPenggajian'). Tanggal jurnal
             // dipakai tanggal terakhir bulan tsb karena payrollHistory tidak menyimpan field 'tanggal'.

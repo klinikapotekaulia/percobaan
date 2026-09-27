@@ -496,6 +496,7 @@ window.AppApotekRetur = {
             satuan:     obat.satuan || '',
             qty:        qty,
             hargaBeli:  harga,
+            isPPN:      obat.isPPN !== false,
             totalNilai: qty * harga,
             alasan:     alasan,
             status:     'menunggu_konfirmasi',
@@ -1018,6 +1019,7 @@ window.AppApotekRetur = {
                             keterangan: 'Selisih diterima dari ' + retur.supplier + ' (retur tukar barang)',
                             jumlah: Math.abs(selisih),
                             status: 'approved',
+                            jenisArusKas: 'retur_supplier',
                             referenceId: id,
                             inputOleh: window.currentUserName || 'Admin',
                             createdAt: firebase.firestore.FieldValue.serverTimestamp()

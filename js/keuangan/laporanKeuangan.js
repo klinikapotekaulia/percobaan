@@ -350,7 +350,7 @@ window.AppKeuanganLaporanKeuangan = {
         var self = this;
 
         // 1. KALKULASI PENDAPATAN (Dari Transaksi)
-        var totalOmzet = 0, totalHPP = 0, totalLabaKotor = 0;
+        var totalOmzet = 0, totalPendapatanNet = 0, totalHPP = 0, totalLabaKotor = 0;
         var totalTindakan = 0, totalRacik = 0, totalJasaResep = 0, totalPembulatan = 0;
         var totalModalTindakan = 0;
         var cashMasuk = 0, transferMasuk = 0, qrisMasuk = 0;
@@ -383,12 +383,11 @@ window.AppKeuanganLaporanKeuangan = {
             totalRacik += (t.totalRacik || 0);
             totalJasaResep += (t.jasaResep || 0);
             totalPembulatan += (t.pembulatan || 0);
-            totalLabaKotor += (omzetObat - hppObat) + (t.totalRacik || 0) + (t.totalTindakan || 0) - modalTindakan + (t.jasaResep || 0) + (t.pembulatan || 0);
 
-            // Hitung atau ambil PPN Keluaran
+            // PPN keluaran harus dihitung sebelum laba kotor agar PPN tidak menjadi pendapatan.
             var ppn = 0;
             if (t.totalPPN !== undefined) {
-                ppn = t.totalPPN;
+                ppn = parseFloat(t.totalPPN) || 0;
             } else if (t.items) {
                 t.items.forEach(function(item) {
                     if (item.isPPN !== false) {
@@ -398,6 +397,9 @@ window.AppKeuanganLaporanKeuangan = {
                 });
             }
             totalPPNKeluaran += ppn;
+
+            totalLabaKotor += (omzetObat - ppn - hppObat) + (t.totalRacik || 0) + (t.totalTindakan || 0) - modalTindakan + (t.jasaResep || 0) + (t.pembulatan || 0);
+            totalPendapatanNet += (omzetObat + (t.totalRacik || 0) + (t.totalTindakan || 0) + (t.jasaResep || 0) + (t.pembulatan || 0)) - ppn;
 
             if (t.metodeBayar === 'cash') cashMasuk += t.totalAkhir || 0;
             else if (t.metodeBayar === 'transfer') transferMasuk += t.totalAkhir || 0;
@@ -477,7 +479,12 @@ window.AppKeuanganLaporanKeuangan = {
         // FITUR BARU: Pemasukan Lain (Non-Penjualan) — mis. selisih retur tukar barang yang
         // DITERIMA dari supplier, otomatis tercatat di koleksi kasMasuk saat retur dikonfirmasi.
         var totalPemasukanLain = 0;
-        this.dataPemasukanLain.forEach(function(m) { totalPemasukanLain += m.jumlah || 0; });
+        this.dataPemasukanLain.forEach(function(m) {
+            // Pengembalian nilai barang dari supplier bukan pendapatan/laba baru.
+            // Tetap masuk arus kas, tetapi tidak boleh menaikkan laba bersih.
+            if (m.jenisArusKas === 'retur_supplier') return;
+            totalPemasukanLain += m.jumlah || 0;
+        });
 
         // INTEGRASI: total pendapatan non-operasional (modul Pendapatan Lain - sewa, bunga bank,
         // komisi, dll). Berbeda dari totalPemasukanLain (selisih retur tukar barang dari kasMasuk),
@@ -506,8 +513,8 @@ window.AppKeuanganLaporanKeuangan = {
         var pertumbuhanOmzet = omzetBulanLalu > 0 ? ((totalOmzet - omzetBulanLalu) / omzetBulanLalu) * 100 : null;
 
         // FITUR BARU: rasio keuangan dasar
-        var marginLabaKotor = totalOmzet > 0 ? (totalLabaKotor / totalOmzet) * 100 : 0;
-        var marginLabaBersih = totalOmzet > 0 ? (labaBersih / totalOmzet) * 100 : 0;
+        var marginLabaKotor = totalPendapatanNet > 0 ? (totalLabaKotor / totalPendapatanNet) * 100 : 0;
+        var marginLabaBersih = totalPendapatanNet > 0 ? (labaBersih / totalPendapatanNet) * 100 : 0;
 
         // ============================================================
         // FITUR BARU: LAPORAN KEUANGAN BAYANGAN (Real-Time / Akrual)
@@ -534,7 +541,7 @@ window.AppKeuanganLaporanKeuangan = {
 
         // Simpan ringkasan supaya bisa dipakai fungsi export tanpa hitung ulang
         this.summary = {
-            totalOmzet: totalOmzet, totalHPP: totalHPP, totalLabaKotor: totalLabaKotor,
+            totalOmzet: totalOmzet, totalPendapatanNet: totalPendapatanNet, totalHPP: totalHPP, totalLabaKotor: totalLabaKotor,
             totalTindakan: totalTindakan, totalRacik: totalRacik, totalJasaResep: totalJasaResep, totalPembulatan: totalPembulatan,
             totalModalTindakan: totalModalTindakan,
             cashMasuk: cashMasuk, transferMasuk: transferMasuk, qrisMasuk: qrisMasuk,

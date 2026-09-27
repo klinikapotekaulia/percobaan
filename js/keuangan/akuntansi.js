@@ -100,6 +100,7 @@ window.AppKeuanganAkuntansi = {
 
         var pTrx = db.collection('transaksi').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get();
         var pKasKeluar = db.collection('kasKeluar').where('status', '==', 'approved').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get();
+        var pRetur = db.collection('retur').where('status', '==', 'dikonfirmasi').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
         // BUG FIX PENTING: modul Pembelian (js/apotek/pembelian.js) menyimpan datanya ke collection
         // 'pembelian', BUKAN 'pembelianStok'. Sebelumnya query ini SELALU kosong sehingga transaksi
         // pembelian obat tidak pernah tercatat di jurnal akuntansi.
@@ -118,7 +119,7 @@ window.AppKeuanganAkuntansi = {
         var pTHRPenyisihan = db.collection('thrPenyisihan').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
         var pTHRPembayaran = db.collection('thrPembayaranHistory').where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(new Date(startDate + 'T00:00:00'))).where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(new Date(endDate + 'T23:59:59'))).get().catch(function() { return []; });
 
-        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi, pTHRPembayaran, pTHRPenyisihan]).then(function(results) {
+        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi, pTHRPembayaran, pTHRPenyisihan, pRetur]).then(function(results) {
             self.dataJurnal = [];
             self.dataSaldoAwal = [];
             // MEMO (bukan bagian jurnal resmi): simpan transaksi mentah bulan berjalan supaya
@@ -149,7 +150,7 @@ window.AppKeuanganAkuntansi = {
                     });
                 }
 
-                var ppnKeluaran = Math.round(omzetPPNGross - (omzetPPNGross / 1.11));
+                var ppnKeluaran = t.totalPPN !== undefined ? (parseFloat(t.totalPPN) || 0) : Math.round(omzetPPNGross - (omzetPPNGross / 1.11));
                 var omzetPPNNeto = omzetPPNGross - ppnKeluaran;
                 var pendapatanJasa = (t.totalTindakan || 0) + (t.totalRacik || 0) + (t.jasaResep || 0);
                 var kasBank = t.metodeBayar === 'cash' ? '1-1100' : '1-1200';
@@ -181,6 +182,20 @@ window.AppKeuanganAkuntansi = {
                     self.dataJurnal.push({ tanggal: t.tanggal, keterangan: 'Kredit Persediaan PPN', akunDebit: '', akunKredit: '1-1410', debit: 0, kredit: hppPPN, isManual: false, tipeJurnal: 'Otomatis' });
                 }
             });
+
+            // Jurnal Otomatis Retur Supplier (retur uang): stok keluar dari persediaan
+            // dan pengembalian dari supplier bukan pendapatan baru.
+            if (results[10] && results[10].forEach) {
+                results[10].forEach(function(doc) {
+                    var r = doc.data();
+                    if (r.jenisRetur !== 'uang') return;
+                    var nominal = parseFloat(r.totalNilai) || 0;
+                    if (nominal <= 0) return;
+                    var ketRetur = 'Retur Supplier - ' + (r.namaObat || r.supplier || '-');
+                    self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur, akunDebit: '1-1100', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                    self.dataJurnal.push({ tanggal: r.tanggal, keterangan: ketRetur, akunDebit: '', akunKredit: r.isPPN ? '1-1410' : '1-1400', debit: 0, kredit: nominal, isManual: false, tipeJurnal: 'Otomatis' });
+                });
+            }
 
             // Jurnal Otomatis Pembelian Stok
             results[2].forEach(function(doc) {

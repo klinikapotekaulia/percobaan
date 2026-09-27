@@ -559,7 +559,9 @@ window.AppKeuanganPayroll = {
                     var jmlResepApotek = rPoolApotek ? rPoolApotek.jmlResepKlinik : 0;
                     if (jmlResepKlinik > 0 || jmlResepApotek > 0) {
                         var slotsKli = dc.slotKaryKlinik || dc.poolKlinik || [];
-                        var slotKli = slotsKli.find(function(s) { return s.karyawanId === k.id; });
+                        // Pool Klinik hanya untuk karyawan departemen Klinik.
+                        // Dokter tidak boleh ikut meskipun ID-nya masih tersimpan di slot lama.
+                        var slotKli = (depKey === 'klinik') ? slotsKli.find(function(s) { return s.karyawanId === k.id; }) : null;
                         if (slotKli) {
                             var totalPoolK = (dc.poolKaryKlinik || 0) * jmlResepKlinik;
                             var hasilThrK = totalPoolK * ((dc.thrPersenKlinik || 0) / 100);
@@ -593,7 +595,9 @@ window.AppKeuanganPayroll = {
             var bagTuslah = 0, thrTuslah = 0;
             var slotsTindakanKlinik = self._slotArr(cfg.tindakanKlinik);
             var thrPctKlinik        = self._persenTHR(cfg.tindakanKlinik);
-            var slotTK = slotsTindakanKlinik.find(function(s) { return s.karyawanId === k.id; });
+            // Tuslah Klinik hanya untuk karyawan departemen Klinik.
+            // Dokter tidak ikut skema Tuslah Klinik meskipun masih ada di slot konfigurasi.
+            var slotTK = (depKey === 'klinik') ? slotsTindakanKlinik.find(function(s) { return s.karyawanId === k.id; }) : null;
             if (slotTK && (slotTK.persen || 0) > 0 && rekapAbsensiKlinik.totalTuslahKlinik > 0) {
                 var hasilThrTK = rekapAbsensiKlinik.totalTuslahKlinik * (thrPctKlinik / 100);
                 var sisaCashTK = rekapAbsensiKlinik.totalTuslahKlinik - hasilThrTK;

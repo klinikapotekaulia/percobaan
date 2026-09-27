@@ -194,7 +194,7 @@ window.AppKeuanganLaporanKeuangan = {
         // filter tanggal lagi di sini seperti di payroll.js punya (yang jendelanya per-karyawan).
         this.dataTransaksi.forEach(function(t) {
             var omzetObat = t.items ? t.items.reduce(function(s, i) { return s + (i.jumlah * i.hargaJual); }, 0) : 0;
-            var hppObat = t.items ? t.items.reduce(function(s, i) { return s + (i.jumlah * (i.hargaBeli || 0)); }, 0) : 0;
+            var hppObat = t.items ? t.items.reduce(function(s, i) { var gross = i.jumlah * (i.hargaBeli || 0); var ppn = i.isPPN ? Math.round(gross - (gross / 1.11)) : 0; return s + (gross - ppn); }, 0) : 0;
             totalLabaObat += (omzetObat - hppObat);
             totalPembulatan += (t.pembulatan || 0);
 
@@ -342,7 +342,7 @@ window.AppKeuanganLaporanKeuangan = {
 
         this.dataTransaksi.forEach(function(t) {
             var omzetObat = t.items ? t.items.reduce(function(s, i) { return s + (i.jumlah * i.hargaJual); }, 0) : 0;
-            var hppObat = t.items ? t.items.reduce(function(s, i) { return s + (i.jumlah * (i.hargaBeli || 0)); }, 0) : 0;
+            var hppObat = t.items ? t.items.reduce(function(s, i) { var gross = i.jumlah * (i.hargaBeli || 0); var ppn = i.isPPN ? Math.round(gross - (gross / 1.11)) : 0; return s + (gross - ppn); }, 0) : 0;
             // FIX (AKURASI LABA KOTOR): "modal" tindakan (biaya bahan/reagen/strip per
             // tindakan -- field yang sama yang dipakai Master Tindakan untuk hitung
             // "Tuslah" & dipakai payroll.js/_hitungRekapBulanIniUntukPayroll untuk bagi
@@ -510,7 +510,7 @@ window.AppKeuanganLaporanKeuangan = {
         });
         daftarHutangJatuhTempo.forEach(function(h) { hutangJatuhTempoBulanIni += h.totalHarga || 0; });
 
-        var labaBersihBayangan = totalLabaKotor - totalOperasional - totalTHR - payrollRealtime.total + totalPemasukanLain + totalPendapatanLain - hutangJatuhTempoBulanIni;
+        var labaBersihBayangan = totalLabaKotor - totalOperasional - totalTHR - payrollRealtime.total + totalPemasukanLain + totalPendapatanLain;
         var selisihVsResmi = labaBersihBayangan - labaBersih; // kewajiban yg blm cair tapi sudah kehitung di sini
 
         // Simpan ringkasan supaya bisa dipakai fungsi export tanpa hitung ulang
@@ -684,7 +684,7 @@ window.AppKeuanganLaporanKeuangan = {
             html += '    <h3 class="font-bold text-gray-800 dark:text-white flex items-center gap-2"><i data-lucide="ghost" class="w-5 h-5 text-primary-500"></i> Laporan Keuangan Bayangan (Real-Time)</h3>';
             html += '    ' + badgeBayangan;
             html += '  </div>';
-            html += '  <p class="text-xs text-slate-400 dark:text-slate-500 mb-4">Estimasi laba PSA sesungguhnya — payroll dihitung real-time (walau belum ditekan "Bayarkan") & hutang yang jatuh tempo bulan ini ikut dikurangi, walau belum dibayar.</p>';
+            html += '  <p class="text-xs text-slate-400 dark:text-slate-500 mb-4">Estimasi laba PSA sesungguhnya — payroll dihitung real-time (walau belum ditekan "Bayarkan"). Hutang supplier ditampilkan terpisah karena pembayaran hutang bukan beban laba.</p>';
 
             html += '  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">';
             html += '    <div class="space-y-2 text-sm">';
@@ -698,7 +698,7 @@ window.AppKeuanganLaporanKeuangan = {
             if (totalPemasukanLain > 0) {
                 html += '      <div class="flex justify-between pl-4 text-xs"><span class="text-slate-400">+ Pemasukan Lain</span><span class="text-emerald-500">' + Utils.formatRupiah(totalPemasukanLain) + '</span></div>';
             }
-            html += '      <div class="flex justify-between pl-4 text-xs"><span class="text-slate-400">- Hutang Jatuh Tempo (s/d ' + this._fmtTglSingkat(this.endDate) + ')</span><span class="text-red-500">' + Utils.formatRupiah(hutangJatuhTempoBulanIni) + '</span></div>';
+            html += '      <div class="flex justify-between pl-4 text-xs"><span class="text-slate-400">Hutang Jatuh Tempo (informasi, bukan beban)</span><span class="text-amber-600">' + Utils.formatRupiah(hutangJatuhTempoBulanIni) + '</span></div>';
             html += '      <div class="flex justify-between border-t-2 border-slate-200 pt-3 mt-2"><span class="font-bold text-gray-800 dark:text-white">LABA BERSIH BAYANGAN</span><span class="font-bold text-lg ' + (isUntung ? 'text-emerald-600' : 'text-red-600') + '">' + Utils.formatRupiah(labaBersihBayangan) + '</span></div>';
             html += '    </div>';
 
@@ -706,7 +706,7 @@ window.AppKeuanganLaporanKeuangan = {
             html += '      <div class="flex justify-between"><span class="text-slate-500">Laba Bersih resmi (basis kas)</span><span class="font-semibold text-gray-700 dark:text-slate-300">' + Utils.formatRupiah(labaBersih) + '</span></div>';
             html += '      <div class="flex justify-between"><span class="text-slate-500">Laba Bersih Bayangan (basis akrual)</span><span class="font-semibold ' + (isUntung ? 'text-emerald-600' : 'text-red-600') + '">' + Utils.formatRupiah(labaBersihBayangan) + '</span></div>';
             html += '      <div class="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-2"><span class="text-slate-500">Selisih</span><span class="font-bold ' + (selisihVsResmi <= 0 ? 'text-red-500' : 'text-emerald-500') + '">' + (selisihVsResmi > 0 ? '+' : '') + Utils.formatRupiah(selisihVsResmi) + '</span></div>';
-            html += '      <p class="text-xs text-slate-400 pt-1">Selisih ini adalah kewajiban (payroll + hutang) yang sudah harus dihitung tapi belum tentu sudah cair sebagai kas.</p>';
+            html += '      <p class="text-xs text-slate-400 pt-1">Selisih terutama berasal dari payroll yang sudah menjadi beban tetapi belum dibayarkan; hutang supplier tidak mengurangi laba lagi karena HPP dicatat saat barang terjual.</p>';
             if (daftarHutangJatuhTempo.length > 0) {
                 html += '      <p class="text-xs text-amber-600 dark:text-amber-400 pt-1 font-medium">' + daftarHutangJatuhTempo.length + ' faktur hutang jatuh tempo s/d akhir bulan ini, lihat detail di modul Hutang Usaha.</p>';
             }

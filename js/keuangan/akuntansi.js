@@ -13,6 +13,7 @@ window.AppKeuanganAkuntansi = {
         '1-1400': { nama: 'Persediaan Obat (Non-PPN)', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1410': { nama: 'Persediaan Obat (PPN 11%)', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-1500': { nama: 'Perlengkapan & ATK', kategori: 'Aset', saldoNormal: 'Debit' },
+        '1-1510': { nama: 'PPN Masukan Dapat Dikreditkan', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-2100': { nama: 'Peralatan Medis', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-2200': { nama: 'Peralatan Apotek & Furniture', kategori: 'Aset', saldoNormal: 'Debit' },
         '1-2900': { nama: 'Akumulasi Penyusutan', kategori: 'Aset', saldoNormal: 'Kredit' },
@@ -136,7 +137,9 @@ window.AppKeuanganAkuntansi = {
                 if (t.items) {
                     t.items.forEach(function(it) {
                         var subJual = it.jumlah * it.hargaJual;
-                        var subBeli = it.jumlah * (it.hargaBeli || 0);
+                        var subBeliGross = it.jumlah * (it.hargaBeli || 0);
+                        var subBeliPPN = it.isPPN ? Math.round(subBeliGross - (subBeliGross / 1.11)) : 0;
+                        var subBeli = subBeliGross - subBeliPPN;
                         if (it.isPPN) { omzetPPNGross += subJual; hppPPN += subBeli; } 
                         else { omzetNonPPN += subJual; hppNonPPN += subBeli; }
                     });
@@ -193,7 +196,7 @@ window.AppKeuanganAkuntansi = {
 
                 if (valNonPPN > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'Beli Stok Non-PPN', akunDebit: '1-1400', akunKredit: '', debit: valNonPPN, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
                 if (valPersediaanPPN > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'Beli Stok PPN', akunDebit: '1-1410', akunKredit: '', debit: valPersediaanPPN, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
-                if (ppnMasukan > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'PPN Masukan', akunDebit: '2-1200', akunKredit: '', debit: ppnMasukan, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                if (ppnMasukan > 0) self.dataJurnal.push({ tanggal: b.tanggal, keterangan: 'PPN Masukan', akunDebit: '1-1510', akunKredit: '', debit: ppnMasukan, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
 
                 // FIX: koleksi pembelian memakai field `metodePembayaran` ('tunai'/'kredit') & `totalHarga`,
                 //      bukan `metodeBayar`/`totalTagihan`. Sebelumnya semua pembelian salah diakui sbg Bank.

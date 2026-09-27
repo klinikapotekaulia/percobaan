@@ -856,8 +856,13 @@ window.AppApotekRetur = {
                         stokSaatIni + ', dibutuhkan ' + qty + '.');
                 }
 
+                var hppSaatIni = parseFloat(obatSnap.data().hpp) || 0;
+                var nilaiPersediaanRetur = qty * hppSaatIni;
+
                 tx.update(returRef, {
                     status: 'dikonfirmasi',
+                    hppRetur: hppSaatIni,
+                    nilaiPersediaanRetur: nilaiPersediaanRetur,
                     dikonfirmasiOleh: window.currentUserName || 'Admin',
                     dikonfirmasiAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
@@ -926,23 +931,97 @@ window.AppApotekRetur = {
                     throw new Error('Retur ini sudah diproses sebelumnya.');
                 }
 
-                // Validasi & tulis stok per obat
+                // Validasi & tulis stok per obat.
+                // Moving Average Perpetual: barang keluar mengurangi nilai persediaan
+                // sebesar HPP berjalan saat konfirmasi; barang masuk menambah persediaan
+                // sebesar harga beli net PPN. HPP baru dihitung dari nilai persediaan aktual.
+                var hppKeluarMap = {};
+                var nilaiKeluarMap = {};
+                var nilaiMasukMap = {};
+                var ppnMasukMap = {};
+
+                (retur.barangKeluar || []).forEach(function(item) {
+                    var oid = item.obatId;
+                    var qtyKeluar = parseFloat(item.qty) || 0;
+                    var snap = obatSnaps[obatIds.indexOf(oid)];
+                    var hppSaatIni = snap && snap.exists ? (parseFloat(snap.data().hpp) || 0) : 0;
+                    hppKeluarMap[oid] = hppSaatIni;
+                    nilaiKeluarMap[oid] = (nilaiKeluarMap[oid] || 0) + (qtyKeluar * hppSaatIni);
+                });
+
+                (retur.barangMasuk || []).forEach(function(item) {
+                    var oid = item.obatId;
+                    var qtyMasuk = parseFloat(item.qty) || 0;
+                    var hargaGross = parseFloat(item.harga) || 0;
+                    var snap = obatSnaps[obatIds.indexOf(oid)];
+                    var isPPN = snap && snap.exists ? (snap.data().isPPN !== false) : true;
+                    var gross = qtyMasuk * hargaGross;
+                    var ppn = isPPN ? Math.round(gross - (gross / 1.11)) : 0;
+                    var nilaiNet = gross - ppn;
+                    nilaiMasukMap[oid] = (nilaiMasukMap[oid] || 0) + nilaiNet;
+                    ppnMasukMap[oid] = (ppnMasukMap[oid] || 0) + ppn;
+                });
+
+                var detailKeluar = (retur.barangKeluar || []).map(function(item) {
+                    var oid = item.obatId;
+                    var qty = parseFloat(item.qty) || 0;
+                    var hpp = hppKeluarMap[oid] || 0;
+                    return Object.assign({}, item, {
+                        hppSaatRetur: hpp,
+                        nilaiPersediaanRetur: qty * hpp
+                    });
+                });
+                var detailMasuk = (retur.barangMasuk || []).map(function(item) {
+                    var oid = item.obatId;
+                    var qty = parseFloat(item.qty) || 0;
+                    var snap = obatSnaps[obatIds.indexOf(oid)];
+                    var isPPN = snap && snap.exists ? (snap.data().isPPN !== false) : true;
+                    var gross = qty * (parseFloat(item.harga) || 0);
+                    var ppn = isPPN ? Math.round(gross - (gross / 1.11)) : 0;
+                    return Object.assign({}, item, {
+                        isPPN: isPPN,
+                        nilaiPersediaanMasuk: gross - ppn,
+                        ppnMasuk: ppn
+                    });
+                });
+
                 obatSnaps.forEach(function(snap, idx) {
                     var oid = obatIds[idx];
                     if (!snap.exists) throw new Error('Salah satu obat terkait tidak ditemukan.');
-                    var stokSaatIni = snap.data().stok || 0;
-                    var stokBaru = stokSaatIni + deltaMap[oid];
+                    var dataObat = snap.data();
+                    var stokSaatIni = parseFloat(dataObat.stok) || 0;
+                    var hppSaatIni = parseFloat(dataObat.hpp) || 0;
+                    var stokBaru = stokSaatIni + (deltaMap[oid] || 0);
                     if (stokBaru < 0) {
-                        throw new Error('Stok "' + (snap.data().namaObat || oid) + '" tidak cukup untuk retur ini (tersisa ' + stokSaatIni + ').');
+                        throw new Error('Stok "' + (dataObat.namaObat || oid) + '" tidak cukup untuk retur ini (tersisa ' + stokSaatIni + ').');
                     }
+
+                    var nilaiLama = stokSaatIni * hppSaatIni;
+                    var nilaiKeluar = nilaiKeluarMap[oid] || 0;
+                    var nilaiMasuk = nilaiMasukMap[oid] || 0;
+                    var nilaiBaru = nilaiLama - nilaiKeluar + nilaiMasuk;
+                    var hppBaru = stokBaru > 0 ? nilaiBaru / stokBaru : hppSaatIni;
+
                     tx.update(obatRefs[idx], {
                         stok: stokBaru,
+                        hpp: Math.round(hppBaru * 100) / 100,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 });
 
+                var totalNilaiPersediaanKeluar = detailKeluar.reduce(function(sum, item) {
+                    return sum + (parseFloat(item.nilaiPersediaanRetur) || 0);
+                }, 0);
+                var totalNilaiPersediaanMasuk = detailMasuk.reduce(function(sum, item) {
+                    return sum + (parseFloat(item.nilaiPersediaanMasuk) || 0);
+                }, 0);
+
                 var returUpdate = {
                     status: 'dikonfirmasi',
+                    barangKeluar: detailKeluar,
+                    barangMasuk: detailMasuk,
+                    totalNilaiPersediaanKeluar: totalNilaiPersediaanKeluar,
+                    totalNilaiPersediaanMasuk: totalNilaiPersediaanMasuk,
                     dikonfirmasiOleh: window.currentUserName || 'Admin',
                     dikonfirmasiAt: firebase.firestore.FieldValue.serverTimestamp()
                 };

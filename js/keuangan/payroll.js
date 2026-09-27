@@ -712,7 +712,9 @@ window.AppKeuanganPayroll = {
             var tunjanganLain = mInput.tunjanganLain;
             var potKasbon = mInput.potKasbon;
             var potWisata = mInput.potWisata;
-            var totalGaji = (totalPendapatan + tunjanganLain) - (potKasbon + potWisata);
+            var grossPayroll = totalPendapatan + tunjanganLain;
+            var totalPotongan = potKasbon + potWisata;
+            var totalGaji = grossPayroll - totalPotongan;
 
             self.kalkulasiGaji.push({
                 karyawanId: k.id, nama: k.nama, departemen: k.departemen, jabatan: k.jabatan,
@@ -724,7 +726,8 @@ window.AppKeuanganPayroll = {
                 thrBulanIni: thrBulanIni, thrSaldoSebelum: thrSaldoSebelum,
                 thrSaldoProyeksi: thrSaldoSebelum + thrBulanIni, thrSudahDibayarkan: false,
                 tunjanganLain: tunjanganLain, potKasbon: potKasbon, potWisata: potWisata,
-                totalPendapatan: totalPendapatan, totalGaji: totalGaji
+                totalPendapatan: totalPendapatan, grossPayroll: grossPayroll,
+                totalPotongan: totalPotongan, netPay: totalGaji, totalGaji: totalGaji
             });
         });
 
@@ -899,8 +902,13 @@ window.AppKeuanganPayroll = {
         k.potKasbon = kasbon;
         k.potWisata = wisata;
 
-        var totalAkhir = (k.totalPendapatan + tunjangan) - (kasbon + wisata);
+        var grossPayroll = k.totalPendapatan + tunjangan;
+        var totalPotongan = kasbon + wisata;
+        var totalAkhir = grossPayroll - totalPotongan;
         document.getElementById('total-' + idx).textContent = Utils.formatRupiah(totalAkhir);
+        k.grossPayroll = grossPayroll;
+        k.totalPotongan = totalPotongan;
+        k.netPay = totalAkhir;
         k.totalGaji = totalAkhir;
     },
 
@@ -1097,6 +1105,9 @@ window.AppKeuanganPayroll = {
                 tunjanganLain: k.tunjanganLain,
                 potKasbon: k.potKasbon,
                 potWisata: k.potWisata,
+                grossPayroll: k.grossPayroll || (k.totalGaji + (k.potKasbon || 0) + (k.potWisata || 0)),
+                totalPotongan: k.totalPotongan || ((k.potKasbon || 0) + (k.potWisata || 0)),
+                netPay: k.netPay !== undefined ? k.netPay : k.totalGaji,
                 totalGaji: k.totalGaji,
                 status: 'paid',
                 diprosesOleh: window.currentUserName || 'Keuangan',
@@ -1118,6 +1129,9 @@ window.AppKeuanganPayroll = {
                 tipeArusKas: 'gaji_payroll', // FIX: penanda supaya tidak dobel hitung sbg Biaya Operasional
                 keterangan: 'Pembayaran Gaji Karyawan - ' + k.nama + ' (Periode ' + self._fmtTgl(k.periodeMulai) + ' s/d ' + self._fmtTgl(k.periodeSampai) + ')',
                 jumlah: k.totalGaji,
+                grossPayroll: k.grossPayroll || (k.totalGaji + (k.potKasbon || 0) + (k.potWisata || 0)),
+                totalPotongan: k.totalPotongan || ((k.potKasbon || 0) + (k.potWisata || 0)),
+                netPay: k.netPay !== undefined ? k.netPay : k.totalGaji,
                 tanggal: inputTglCatatan,
                 tanggalBayar: inputTglTransfer,
                 bulan: inputBulan,

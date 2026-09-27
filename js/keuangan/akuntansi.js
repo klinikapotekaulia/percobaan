@@ -351,8 +351,7 @@ window.AppKeuanganAkuntansi = {
                     // laba/rugi penyesuaian persediaan.
                     var selisihHutang = parseFloat(r.selisih) || 0;
                     var nilaiNetKeluarFaktur = (parseFloat(r.totalNilaiKeluar) || 0) - ppnKeluar;
-                    var selisihHPPKeluar = nilaiNetKeluarKeluar = 0;
-                    selisihHPPKeluar = nilaiNetKeluarFaktur - nilaiKeluar;
+                    var selisihHPPKeluar = nilaiNetKeluarFaktur - nilaiKeluar;
                     if (selisihHPPKeluar > 0) self.dataJurnal.push({
                         tanggal: r.tanggal, keterangan: ket + ' - Keuntungan Selisih HPP',
                         akunDebit: '', akunKredit: '4-1600', debit: 0, kredit: selisihHPPKeluar,

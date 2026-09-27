@@ -844,7 +844,7 @@ window.AppKeuanganPayroll = {
                 html += '<td class="px-2 py-2 text-right text-indigo-600">' + Utils.formatRupiah(k.bagRacik) + '</td>';
 
                 html += '<td class="px-2 py-2 text-right bg-amber-50/50 dark:bg-amber-900/10">';
-                html += '<div class="font-bold text-amber-700 dark:text-amber-400" title="Total Akumulasi THR">' + Utils.formatRupiah(thrYangDibayar) + '</div>';
+                html += '<div class="font-bold text-amber-700 dark:text-amber-400" title="Total Akumulasi THR">' + Utils.formatRupiah(k.thrSaldoProyeksi) + '</div>';
                 html += '<div class="text-[10px] text-slate-500 flex flex-col items-end mt-0.5">';
                 html += '<span>Akumulasi: ' + Utils.formatRupiah(k.thrSaldoSebelum) + '</span>';
                 if (k.thrBulanIni > 0) html += '<span class="text-emerald-600 font-semibold">+' + Utils.formatRupiah(k.thrBulanIni) + ' bulan ini</span>';

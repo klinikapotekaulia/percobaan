@@ -337,9 +337,7 @@ window.AppKeuanganPayroll = {
     _karyawanHadirTanggal: function(karyawan, tanggal) {
         if (!karyawan || !tanggal) return true;
 
-        var isKlinik = ['klinik', 'dokter'].indexOf((karyawan.departemen || '').toLowerCase()) !== -1;
-        // Aturan baru hanya berlaku untuk pegawai klinik/dokter.
-        // Pegawai apotek tidak kehilangan hasil kerja karena absensi.
+        var isKlinik = (karyawan.departemen || '').toLowerCase() === 'klinik';
         if (!isKlinik) return true;
 
         return this.dataAbsensi.some(function(a) {
@@ -353,6 +351,47 @@ window.AppKeuanganPayroll = {
         });
     },
 
+    // Rekap yang dipengaruhi absensi hanya untuk Pool Klinik dan Tuslah Klinik.
+    // Komponen payroll lain tetap menggunakan rekap transaksi penuh.
+    _hitungRekapKlinikHadir: function(mulaiTgl, sampaiTgl, karyawan) {
+        var self = this;
+        var cfg = this.configPembagian || {};
+        var rekapDokter = {};
+        var totalTuslahKlinik = 0;
+
+        if (!karyawan || (karyawan.departemen || '').toLowerCase() !== 'klinik') {
+            return { rekapDokter: rekapDokter, totalTuslahKlinik: totalTuslahKlinik };
+        }
+
+        this.dataTransaksi.forEach(function(t) {
+            if (!t.tanggal || t.tanggal < mulaiTgl || t.tanggal > sampaiTgl) return;
+            if (!self._karyawanHadirTanggal(karyawan, t.tanggal)) return;
+
+            if (t.tipe === 'resep_klinik' && (t.dokterId || t.namaDokter)) {
+                var dokId = self._matchDokterId(t.dokterId, t.namaDokter);
+                if (dokId) {
+                    if (!rekapDokter[dokId]) {
+                        rekapDokter[dokId] = { jmlResepKlinik: 0, jasaResepLuar: 0 };
+                    }
+                    rekapDokter[dokId].jmlResepKlinik += 1;
+                }
+            }
+
+            if (t.tindakanItems && t.tindakanItems.length > 0) {
+                t.tindakanItems.forEach(function(tin) {
+                    if (tin.kategori === 'klinik') {
+                        totalTuslahKlinik += (tin.hargaJual || 0) - (tin.modal || 0);
+                    }
+                });
+            }
+        });
+
+        return {
+            rekapDokter: rekapDokter,
+            totalTuslahKlinik: totalTuslahKlinik
+        };
+    },
+
     _hitungRekapPeriode: function(mulaiTgl, sampaiTgl, karyawan) {
         var self = this;
         sampaiTgl = sampaiTgl || self.periodeSampaiGlobal || Utils.today();
@@ -364,11 +403,6 @@ window.AppKeuanganPayroll = {
 
         this.dataTransaksi.forEach(function(t) {
             if (!t.tanggal || t.tanggal < mulaiTgl || t.tanggal > sampaiTgl) return;
-
-            // Untuk pegawai klinik/dokter, hasil kerja dihitung per hari hadir.
-            // Jika tidak ada absensi pada tanggal transaksi, hasil tanggal tersebut
-            // tidak masuk ke bagian pegawai itu. Pegawai apotek tetap dihitung penuh.
-            if (karyawan && !self._karyawanHadirTanggal(karyawan, t.tanggal)) return;
 
             var omzetObat = t.items ? t.items.reduce(function(s, i) { return s + ((i.jumlah || 0) * (i.hargaJual || 0)); }, 0) : 0;
             var hppObat = t.items ? t.items.reduce(function(s, i) { return s + ((i.jumlah || 0) * (i.hargaBeli || 0)); }, 0) : 0;
@@ -474,6 +508,7 @@ window.AppKeuanganPayroll = {
         this.dataKaryawan.forEach(function(k) {
             var mulaiK = self._mulaiKaryawan(k.id);
             var rekap = self._hitungRekapPeriode(mulaiK, self.periodeSampaiGlobal, k);
+            var rekapAbsensiKlinik = self._hitungRekapKlinikHadir(mulaiK, self.periodeSampaiGlobal, k);
             var rekapDokter = rekap.rekapDokter;
             var depKey = (k.departemen || '').toLowerCase();
 
@@ -518,34 +553,36 @@ window.AppKeuanganPayroll = {
             if (cfg.resepKlinik && Array.isArray(cfg.resepKlinik)) {
                 cfg.resepKlinik.forEach(function(dc) {
                     var dokId = self._matchDokterId(dc.dokterId, dc.namaDokter);
-                    var r = dokId ? rekapDokter[dokId] : rekapDokter[dc.dokterId];
-                    var jmlResep = r ? r.jmlResepKlinik : 0;
-                    if (jmlResep > 0) {
+                    var rPoolKlinik = dokId ? rekapAbsensiKlinik.rekapDokter[dokId] : rekapAbsensiKlinik.rekapDokter[dc.dokterId];
+                    var rPoolApotek = dokId ? rekapDokter[dokId] : rekapDokter[dc.dokterId];
+                    var jmlResepKlinik = rPoolKlinik ? rPoolKlinik.jmlResepKlinik : 0;
+                    var jmlResepApotek = rPoolApotek ? rPoolApotek.jmlResepKlinik : 0;
+                    if (jmlResepKlinik > 0 || jmlResepApotek > 0) {
                         var slotsKli = dc.slotKaryKlinik || dc.poolKlinik || [];
                         var slotKli = slotsKli.find(function(s) { return s.karyawanId === k.id; });
                         if (slotKli) {
-                            var totalPoolK = (dc.poolKaryKlinik || 0) * jmlResep;
+                            var totalPoolK = (dc.poolKaryKlinik || 0) * jmlResepKlinik;
                             var hasilThrK = totalPoolK * ((dc.thrPersenKlinik || 0) / 100);
                             var sisaCashK = totalPoolK - hasilThrK;
                             if ((slotKli.persen || 0) > 0) {
                                 bagPoolKlinik += sisaCashK * (slotKli.persen / 100);
                                 if (slotKli.isTHR) thrPoolKlinik += hasilThrK * (slotKli.persen / 100);
                             } else if (slotKli.nominal) {
-                                bagPoolKlinik += (slotKli.nominal || 0) * jmlResep;
+                                bagPoolKlinik += (slotKli.nominal || 0) * jmlResepKlinik;
                             }
                         }
 
                         var slotsApo = dc.slotKaryApotek || dc.poolApotek || [];
                         var slotApo = slotsApo.find(function(s) { return s.karyawanId === k.id; });
                         if (slotApo) {
-                            var totalPoolA = (dc.poolKaryApotek || 0) * jmlResep;
+                            var totalPoolA = (dc.poolKaryApotek || 0) * jmlResepApotek;
                             var hasilThrA = totalPoolA * ((dc.thrPersenApotek || 0) / 100);
                             var sisaCashA = totalPoolA - hasilThrA;
                             if ((slotApo.persen || 0) > 0) {
                                 bagPoolApotek += sisaCashA * (slotApo.persen / 100);
                                 if (slotApo.isTHR) thrPoolApotek += hasilThrA * (slotApo.persen / 100);
                             } else if (slotApo.nominal) {
-                                bagPoolApotek += (slotApo.nominal || 0) * jmlResep;
+                                bagPoolApotek += (slotApo.nominal || 0) * jmlResepApotek;
                             }
                         }
                     }
@@ -557,9 +594,9 @@ window.AppKeuanganPayroll = {
             var slotsTindakanKlinik = self._slotArr(cfg.tindakanKlinik);
             var thrPctKlinik        = self._persenTHR(cfg.tindakanKlinik);
             var slotTK = slotsTindakanKlinik.find(function(s) { return s.karyawanId === k.id; });
-            if (slotTK && (slotTK.persen || 0) > 0 && rekap.totalTuslahKlinik > 0) {
-                var hasilThrTK = rekap.totalTuslahKlinik * (thrPctKlinik / 100);
-                var sisaCashTK = rekap.totalTuslahKlinik - hasilThrTK;
+            if (slotTK && (slotTK.persen || 0) > 0 && rekapAbsensiKlinik.totalTuslahKlinik > 0) {
+                var hasilThrTK = rekapAbsensiKlinik.totalTuslahKlinik * (thrPctKlinik / 100);
+                var sisaCashTK = rekapAbsensiKlinik.totalTuslahKlinik - hasilThrTK;
                 bagTuslah += (sisaCashTK * (slotTK.persen || 0)) / 100;
                 if (slotTK.isTHR) thrTuslah += (hasilThrTK * (slotTK.persen || 0)) / 100;
             }
@@ -607,7 +644,7 @@ window.AppKeuanganPayroll = {
             var bagTransport = 0;
             if (cfg.transport && Array.isArray(cfg.transport)) {
                 var tr = cfg.transport.find(function(t) { return t.karyawanId === k.id; });
-                if (tr) bagTransport = (tr.nominalPerHari || 0) * hadir;
+                if (tr) bagTransport = tr.nominalPerHari || 0;
             } else if (cfg.transport) {
                 var slotsTr = self._slotArr(cfg.transport);
                 var slotTr = slotsTr.find(function(s) { return s.karyawanId === k.id; });

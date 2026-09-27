@@ -818,7 +818,7 @@ window.AppKeuanganPayroll = {
         html += '<th class="px-2 py-3 text-right">Tunjangan Lain</th>';
         html += '<th class="px-2 py-3 text-right">Pot. Kasbon</th>';
         html += '<th class="px-2 py-3 text-right">Pot. Wisata</th>';
-        html += '<th class="px-3 py-3 text-right text-emerald-600">Total Gaji</th>';
+        html += '<th class="px-3 py-3 text-right text-emerald-600">Net Dibayarkan</th>';
         html += '<th class="px-2 py-3 text-center">Aksi</th>';
         html += '</tr></thead><tbody>';
 
@@ -831,6 +831,7 @@ window.AppKeuanganPayroll = {
                 html += '<td class="px-2 py-2 text-left text-slate-500 dark:text-slate-400"><span class="text-[10px]">sejak</span><br>' + AppKeuanganPayroll._fmtTgl(k.periodeMulai) + '<br><span class="text-[10px] text-primary-600">s/d ' + AppKeuanganPayroll._fmtTgl(k.periodeSampai) + '</span></td>';
                 html += '<td class="px-2 py-2 text-center font-medium">' + k.hariKerja + ' H</td>';
                 html += '<td class="px-2 py-2 text-right text-slate-600 dark:text-slate-300">' + Utils.formatRupiah(k.gajiPokok) + '</td>';
+                html += '<td class="px-2 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">' + Utils.formatRupiah(k.grossPayroll) + '</td>';
                 html += '<td class="px-2 py-2 text-right text-blue-600">' + Utils.formatRupiah(k.jasaMedis) + '</td>';
                 html += '<td class="px-2 py-2 text-right text-blue-600">' + Utils.formatRupiah(k.jasaDokter) + '</td>';
                 html += '<td class="px-2 py-2 text-right text-blue-600">' + Utils.formatRupiah(k.jasaResepLuar) + '</td>';
@@ -1278,7 +1279,13 @@ window.AppKeuanganPayroll = {
 
         var totalNominal = this.dataRiwayat.reduce(function(sum, r) { return sum + (r.totalGaji || 0); }, 0);
         var totalGajiPokok = this.dataRiwayat.reduce(function(sum, r) { return sum + (r.gajiPokok || 0); }, 0);
-        var totalJasaTunjangan = totalNominal - totalGajiPokok;
+        var totalGross = this.dataRiwayat.reduce(function(sum, r) {
+            return sum + (r.grossPayroll !== undefined ? r.grossPayroll : (r.totalGaji || 0) + (r.potKasbon || 0) + (r.potWisata || 0));
+        }, 0);
+        var totalPotongan = this.dataRiwayat.reduce(function(sum, r) {
+            return sum + (r.totalPotongan !== undefined ? r.totalPotongan : (r.potKasbon || 0) + (r.potWisata || 0));
+        }, 0);
+        var totalJasaTunjangan = totalGross - totalGajiPokok;
 
         var html = '';
 
@@ -1299,6 +1306,7 @@ window.AppKeuanganPayroll = {
         html += '  <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">';
         html += '    <span class="text-xs text-slate-400">Total Dibayarkan (' + reqBulan + ')</span>';
         html += '    <p class="text-lg font-bold text-emerald-600 mt-1">' + Utils.formatRupiah(totalNominal) + '</p>';
+        html += '    <p class="text-[10px] text-slate-400">Net yang benar-benar dibayarkan</p>';
         html += '  </div>';
         html += '  <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">';
         html += '    <span class="text-xs text-slate-400">Total Karyawan Dibayar</span>';
@@ -1306,8 +1314,9 @@ window.AppKeuanganPayroll = {
         html += '  </div>';
         html += '  <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">';
         html += '    <span class="text-xs text-slate-400">Rincian Pokok / Jasa</span>';
-        html += '    <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-1">Pokok: ' + Utils.formatRupiah(totalGajiPokok) + '</p>';
-        html += '    <p class="text-xs text-slate-500">Jasa &amp; Tunjangan: ' + Utils.formatRupiah(totalJasaTunjangan) + '</p>';
+        html += '    <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-1">Gross: ' + Utils.formatRupiah(totalGross) + '</p>';
+        html += '    <p class="text-xs text-slate-500">Pokok: ' + Utils.formatRupiah(totalGajiPokok) + ' · Jasa/Tunjangan: ' + Utils.formatRupiah(totalJasaTunjangan) + '</p>';
+        html += '    <p class="text-xs text-red-500">Potongan: ' + Utils.formatRupiah(totalPotongan) + '</p>';
         html += '  </div>';
         html += '</div>';
 
@@ -1328,11 +1337,13 @@ window.AppKeuanganPayroll = {
         html += '</tr></thead><tbody>';
 
         if (this.dataRiwayat.length === 0) {
-            html += '<tr><td colspan="9" class="text-center py-8 text-slate-400">Belum ada riwayat penggajian pada bulan ' + reqBulan + '.</td></tr>';
+            html += '<tr><td colspan="10" class="text-center py-8 text-slate-400">Belum ada riwayat penggajian pada bulan ' + reqBulan + '.</td></tr>';
         } else {
             this.dataRiwayat.forEach(function(r, idx) {
                 var tglTrf = r.tanggalBayar || r.tanggal || '-';
-                var subJasa = (r.totalGaji || 0) - (r.gajiPokok || 0);
+                var grossR = r.grossPayroll !== undefined ? r.grossPayroll : (r.totalGaji || 0) + (r.potKasbon || 0) + (r.potWisata || 0);
+                var potR = r.totalPotongan !== undefined ? r.totalPotongan : (r.potKasbon || 0) + (r.potWisata || 0);
+                var subJasa = grossR - (r.gajiPokok || 0);
 
                 html += '<tr class="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">';
                 html += '<td class="px-3 py-2.5 text-slate-400">' + (idx + 1) + '</td>';
@@ -1341,7 +1352,8 @@ window.AppKeuanganPayroll = {
                 html += '<td class="px-3 py-2.5 text-slate-500">' + self._fmtTgl(r.periodeMulai) + ' - ' + self._fmtTgl(r.periodeSampai) + '</td>';
                 html += '<td class="px-3 py-2.5 text-right text-slate-600 dark:text-slate-300">' + Utils.formatRupiah(r.gajiPokok || 0) + '</td>';
                 html += '<td class="px-3 py-2.5 text-right text-blue-600">' + Utils.formatRupiah(subJasa) + '</td>';
-                html += '<td class="px-3 py-2.5 text-right font-bold text-emerald-600">' + Utils.formatRupiah(r.totalGaji || 0) + '</td>';
+                html += '<td class="px-3 py-2.5 text-right text-red-600">' + Utils.formatRupiah(potR) + '</td>';
+                html += '<td class="px-3 py-2.5 text-right font-bold text-emerald-600">' + Utils.formatRupiah(r.netPay !== undefined ? r.netPay : r.totalGaji || 0) + '</td>';
                 html += '<td class="px-3 py-2.5 text-slate-500">' + Utils.escapeHtml(r.diprosesOleh || '-') + '</td>';
                 html += '<td class="px-3 py-2.5 text-center">';
                 html += '<button onclick="AppKeuanganPayroll._printSlipFromHistoryIdx(' + idx + ')" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded flex items-center gap-1 mx-auto"><i data-lucide="printer" class="w-3 h-3"></i> Cetak Slip</button>';

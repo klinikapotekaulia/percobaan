@@ -823,7 +823,7 @@ window.AppKeuanganPayroll = {
         html += '</tr></thead><tbody>';
 
         if (this.kalkulasiGaji.length === 0) {
-            html += '<tr><td colspan="21" class="text-center py-6 text-slate-400">Tidak ada karyawan aktif.</td></tr>';
+            html += '<tr><td colspan="22" class="text-center py-6 text-slate-400">Tidak ada karyawan aktif.</td></tr>';
         } else {
             this.kalkulasiGaji.forEach(function(k, idx) {
                 html += '<tr class="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">';

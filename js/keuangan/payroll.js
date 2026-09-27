@@ -27,7 +27,7 @@ window.AppKeuanganPayroll = {
     // State Periode & Navigasi Tab
     activeTab: 'proses', // 'proses' | 'riwayat' | 'thr'
     dataTHRPembayaran: [],
-    dataTHRRekonsiliasi: null,
+    dataTHRRekonsiliasi: {},
     selectedTargetBulan: null, // 'YYYY-MM'
     selectedCutoffDate: null,  // 'YYYY-MM-DD'
     periodeMap: {},
@@ -152,8 +152,10 @@ window.AppKeuanganPayroll = {
             self._calcTimer = setTimeout(function() {
                 if (self.activeTab === 'proses') {
                     self.hitungPayroll();
-                } else {
+                } else if (self.activeTab === 'riwayat') {
                     self.loadRiwayat();
+                } else {
+                    self.renderTHR();
                 }
             }, 120);
         };
@@ -244,8 +246,11 @@ window.AppKeuanganPayroll = {
         this._unsubs.push(uTHRPay);
 
         // Catatan dana THR yang benar-benar disisihkan, terpisah dari kewajiban.
-        var uTHRRecon = db.collection('thrRekonsiliasi').doc(self.selectedTargetBulan).onSnapshot(function(doc) {
-            self.dataTHRRekonsiliasi = doc.exists ? doc.data() : { danaDisisihkan: 0, catatan: '' };
+        var uTHRRecon = db.collection('thrRekonsiliasi').onSnapshot(function(snap) {
+            self.dataTHRRekonsiliasi = {};
+            snap.forEach(function(doc) {
+                self.dataTHRRekonsiliasi[doc.id] = doc.data();
+            });
             if (self.activeTab === 'thr') self.renderTHR();
         }, function(err) {
             console.error('Error listening to thrRekonsiliasi:', err);
@@ -299,7 +304,11 @@ window.AppKeuanganPayroll = {
         }
         this.defaultAwalBulan = yyyyMM + '-01';
         this.periodeSampaiGlobal = this.selectedCutoffDate;
-        this.hitungPayroll();
+        if (this.activeTab === 'thr') {
+            this.renderTHR();
+        } else {
+            this.hitungPayroll();
+        }
     },
 
     setCutoffDate: function(dateStr) {
@@ -933,7 +942,8 @@ window.AppKeuanganPayroll = {
             return sum + (parseFloat(k.thrBulanIni) || 0);
         }, 0);
         var kewajibanProyeksi = saldoTersimpan + thrBulanIni;
-        var danaDisisihkan = this.dataTHRRekonsiliasi ? (parseFloat(this.dataTHRRekonsiliasi.danaDisisihkan) || 0) : 0;
+        var recon = (this.dataTHRRekonsiliasi && this.dataTHRRekonsiliasi[this.selectedTargetBulan]) ? this.dataTHRRekonsiliasi[this.selectedTargetBulan] : {};
+        var danaDisisihkan = parseFloat(recon.danaDisisihkan) || 0;
         var selisih = danaDisisihkan - kewajibanProyeksi;
         var pembayaranBulanIni = (this.dataTHRPembayaran || []).filter(function(p) {
             return (p.bulanDibayarkan || '').slice(0, 7) === self.selectedTargetBulan;

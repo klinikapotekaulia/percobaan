@@ -22,6 +22,7 @@ window.AppKeuanganAkuntansi = {
         '2-1300': { nama: 'Hutang Gaji', kategori: 'Kewajiban', saldoNormal: 'Kredit' },
         '2-1400': { nama: 'Kewajiban Lain-lain', kategori: 'Kewajiban', saldoNormal: 'Kredit' },
         '2-1410': { nama: 'Titipan Potongan Karyawan (Wisata)', kategori: 'Kewajiban', saldoNormal: 'Kredit' },
+        '2-1500': { nama: 'Hutang THR Karyawan', kategori: 'Kewajiban', saldoNormal: 'Kredit' },
         '3-1000': { nama: 'Modal Pemilik', kategori: 'Ekuitas', saldoNormal: 'Kredit' },
         '3-2000': { nama: 'Prive Pemilik', kategori: 'Ekuitas', saldoNormal: 'Debit' },
         '3-3000': { nama: 'Laba Ditahan', kategori: 'Ekuitas', saldoNormal: 'Kredit' },
@@ -113,8 +114,9 @@ window.AppKeuanganAkuntansi = {
         // di halamannya sendiri.
         var pPendapatanLain = db.collection('pendapatanLain').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get();
         var pMutasi = db.collection('mutasiRekening').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
+        var pTHRPembayaran = db.collection('thrPembayaranHistory').where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(new Date(startDate + 'T00:00:00'))).where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(new Date(endDate + 'T23:59:59'))).get().catch(function() { return []; });
 
-        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi]).then(function(results) {
+        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi, pTHRPembayaran]).then(function(results) {
             self.dataJurnal = [];
             self.dataSaldoAwal = [];
             // MEMO (bukan bagian jurnal resmi): simpan transaksi mentah bulan berjalan supaya
@@ -209,7 +211,7 @@ window.AppKeuanganAkuntansi = {
                 var p = doc.data();
                 
                 // FIX #5: Skip gaji & tunjangan di kasKeluar agar tidak double dengan penggajian
-                if (p.kategori === 'gaji' || p.kategori === 'tunjangan') return; 
+                if (p.kategori === 'gaji' || p.kategori === 'tunjangan' || p.tipeArusKas === 'thr_payroll') return; 
                 
                 var akunDebit = p.akunDebit || '5-2300'; // Gunakan akun debit yang dipilih, default ke 5-2300 (Beban Operasional)
                 self.dataJurnal.push({ tanggal: p.tanggal, keterangan: p.keterangan, akunDebit: akunDebit, akunKredit: '', debit: p.jumlah || 0, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
@@ -221,7 +223,7 @@ window.AppKeuanganAkuntansi = {
             // (field: gajiPokok, totalGaji, dst — bukan array 'dataPenggajian'). Tanggal jurnal
             // dipakai tanggal terakhir bulan tsb karena payrollHistory tidak menyimpan field 'tanggal'.
             var tglPenggajian = endDate;
-            var totalGajiPokokBulan = 0, totalTunjanganJasaBulan = 0, totalKasPayrollBulan = 0;
+            var totalGajiPokokBulan = 0, totalTunjanganJasaBulan = 0, totalKasPayrollBulan = 0, totalTHRTerbentukBulan = 0;
             var totalPotKasbonBulan = 0, totalPotWisataBulan = 0;
             results[3].forEach(function(doc) {
                 var g = doc.data();
@@ -241,12 +243,25 @@ window.AppKeuanganAkuntansi = {
                 totalKasPayrollBulan += netPay;
                 totalPotKasbonBulan += potKasbon;
                 totalPotWisataBulan += potWisata;
+                totalTHRTerbentukBulan += g.thrBulanIni || 0;
             });
             if (totalGajiPokokBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Beban Gaji Pokok Karyawan (' + bulan + ')', akunDebit: '5-2100', akunKredit: '', debit: totalGajiPokokBulan, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
             if (totalTunjanganJasaBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Beban Tunjangan & Jasa Pembagian Hasil (' + bulan + ')', akunDebit: '5-2200', akunKredit: '', debit: totalTunjanganJasaBulan, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
             if (totalKasPayrollBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Kas Keluar Pembayaran Payroll Neto (' + bulan + ')', akunDebit: '', akunKredit: '1-1100', debit: 0, kredit: totalKasPayrollBulan, isManual: false, tipeJurnal: 'Otomatis' });
             if (totalPotKasbonBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Potongan Kasbon - Piutang Karyawan (' + bulan + ')', akunDebit: '', akunKredit: '1-1310', debit: 0, kredit: totalPotKasbonBulan, isManual: false, tipeJurnal: 'Otomatis' });
             if (totalPotWisataBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Potongan Wisata - Titipan Karyawan (' + bulan + ')', akunDebit: '', akunKredit: '2-1410', debit: 0, kredit: totalPotWisataBulan, isManual: false, tipeJurnal: 'Otomatis' });
+            if (totalTHRTerbentukBulan > 0) self.dataJurnal.push({ tanggal: tglPenggajian, keterangan: 'Pembentukan Kewajiban THR (' + bulan + ')', akunDebit: '5-2200', akunKredit: '2-1500', debit: totalTHRTerbentukBulan, kredit: totalTHRTerbentukBulan, isManual: false, tipeJurnal: 'Otomatis' });
+
+            // Pencairan THR: mengurangi kewajiban THR, bukan beban baru.
+            results[8].forEach(function(doc) {
+                var h = doc.data();
+                var nominal = h.jumlah || 0;
+                if (nominal > 0) {
+                    var tgl = h.tanggalBayar || (h.createdAt && h.createdAt.toDate ? h.createdAt.toDate().toISOString().slice(0, 10) : endDate);
+                    self.dataJurnal.push({ tanggal: tgl, keterangan: 'Pembayaran THR - ' + (h.namaKaryawan || '-'), akunDebit: '2-1500', akunKredit: '', debit: nominal, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                    self.dataJurnal.push({ tanggal: tgl, keterangan: 'Kas Keluar Pembayaran THR', akunDebit: '', akunKredit: '1-1100', debit: 0, kredit: nominal, isManual: false, tipeJurnal: 'Otomatis' });
+                }
+            });
 
             // INTEGRASI: Jurnal Otomatis Pendapatan Lain (modul Pendapatan Lain - sewa, bunga bank,
             // komisi, dll). Dicatat sebagai Kas masuk (Debit 1-1100) & Kredit 4-1500 Pendapatan Lain-lain,

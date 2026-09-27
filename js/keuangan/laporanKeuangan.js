@@ -236,7 +236,7 @@ window.AppKeuanganLaporanKeuangan = {
         var cfg = this.configPembagian || {};
         var rekap = this._hitungRekapBulanIniUntukPayroll();
         var rekapDokter = rekap.rekapDokter;
-        var totalGajiPokok = 0, totalTunjanganJasa = 0;
+        var totalGajiPokok = 0, totalTunjanganJasa = 0, totalTHRRealtime = 0;
 
         (this.dataKaryawan || []).forEach(function(k) {
             var depKey = (k.departemen || '').toLowerCase();
@@ -267,6 +267,7 @@ window.AppKeuanganLaporanKeuangan = {
                             var hasilThrK = totalPoolK * ((dc.thrPersenKlinik || 0) / 100);
                             var sisaCashK = totalPoolK - hasilThrK;
                             bagPoolKlinik += sisaCashK * (slotKlinik.persen / 100);
+                            if (slotKlinik.isTHR) totalTHRRealtime += hasilThrK * (slotKlinik.persen / 100);
                         }
                         var slotApotek = (dc.slotKaryApotek || []).find(function(s) { return s.karyawanId === k.id; });
                         if (slotApotek) {
@@ -274,6 +275,7 @@ window.AppKeuanganLaporanKeuangan = {
                             var hasilThrA = totalPoolA * ((dc.thrPersenApotek || 0) / 100);
                             var sisaCashA = totalPoolA - hasilThrA;
                             bagPoolApotek += sisaCashA * (slotApotek.persen / 100);
+                            if (slotApotek.isTHR) totalTHRRealtime += hasilThrA * (slotApotek.persen / 100);
                         }
                     }
                 });
@@ -287,6 +289,7 @@ window.AppKeuanganLaporanKeuangan = {
                 var hasilThrTK = rekap.totalTuslahKlinik * (persenThrTindakanKlinik / 100);
                 var sisaCashTK = rekap.totalTuslahKlinik - hasilThrTK;
                 bagTuslah += (sisaCashTK * mySlotTindakanKlinik.persen) / 100;
+                if (mySlotTindakanKlinik.isTHR) totalTHRRealtime += (hasilThrTK * mySlotTindakanKlinik.persen) / 100;
             }
             var slotsTindakanApotek = self._slotArr(cfg.tindakanApotek);
             var persenThrTindakanApotek = self._persenTHR(cfg.tindakanApotek);
@@ -295,19 +298,28 @@ window.AppKeuanganLaporanKeuangan = {
                 var hasilThrTA = rekap.totalTuslahApotek * (persenThrTindakanApotek / 100);
                 var sisaCashTA = rekap.totalTuslahApotek - hasilThrTA;
                 bagTuslah += (sisaCashTA * mySlotTindakanApotek.persen) / 100;
+                if (mySlotTindakanApotek.isTHR) totalTHRRealtime += (hasilThrTA * mySlotTindakanApotek.persen) / 100;
             }
 
             var bagOmzet = 0;
             if (cfg.tunjanganOmzet && cfg.tunjanganOmzet.persen > 0) {
                 var poolOmzet = (rekap.totalLabaObat * cfg.tunjanganOmzet.persen) / 100;
                 var mySlotOmzet = self._slotArr(cfg.tunjanganOmzet).find(function(s) { return s.karyawanId === k.id; });
-                if (mySlotOmzet) bagOmzet = (poolOmzet * mySlotOmzet.persen) / 100;
+                if (mySlotOmzet) {
+                    var hasilThrOmz = poolOmzet * (self._persenTHR(cfg.tunjanganOmzet) / 100);
+                    bagOmzet = ((poolOmzet - hasilThrOmz) * mySlotOmzet.persen) / 100;
+                    if (mySlotOmzet.isTHR) totalTHRRealtime += (hasilThrOmz * mySlotOmzet.persen) / 100;
+                }
             }
 
             var bagUM = 0;
             if (cfg.uangMakan) {
                 var mySlotUM = self._slotArr(cfg.uangMakan).find(function(s) { return s.karyawanId === k.id; });
-                if (mySlotUM) bagUM = (rekap.totalPembulatan * mySlotUM.persen) / 100;
+                if (mySlotUM) {
+                    var hasilThrUM = rekap.totalPembulatan * (self._persenTHR(cfg.uangMakan) / 100);
+                    bagUM = ((rekap.totalPembulatan - hasilThrUM) * mySlotUM.persen) / 100;
+                    if (mySlotUM.isTHR) totalTHRRealtime += (hasilThrUM * mySlotUM.persen) / 100;
+                }
             }
 
             var bagTransport = 0;
@@ -319,14 +331,18 @@ window.AppKeuanganLaporanKeuangan = {
             var bagRacik = 0;
             if (cfg.racikObat) {
                 var mySlotRacik = self._slotArr(cfg.racikObat).find(function(s) { return s.karyawanId === k.id; });
-                if (mySlotRacik) bagRacik = (rekap.totalNilaiRacik * mySlotRacik.persen) / 100;
+                if (mySlotRacik) {
+                    var hasilThrRacik = rekap.totalNilaiRacik * (self._persenTHR(cfg.racikObat) / 100);
+                    bagRacik = ((rekap.totalNilaiRacik - hasilThrRacik) * mySlotRacik.persen) / 100;
+                    if (mySlotRacik.isTHR) totalTHRRealtime += (hasilThrRacik * mySlotRacik.persen) / 100;
+                }
             }
 
             totalGajiPokok += gajiPokok;
             totalTunjanganJasa += jasaMedis + jasaDokter + jasaResepLuar + bagPoolKlinik + bagPoolApotek + bagTuslah + bagOmzet + bagUM + bagTransport + bagRacik;
         });
 
-        return { totalGajiPokok: totalGajiPokok, totalTunjanganJasa: totalTunjanganJasa, total: totalGajiPokok + totalTunjanganJasa };
+        return { totalGajiPokok: totalGajiPokok, totalTunjanganJasa: totalTunjanganJasa, totalTHR: totalTHRRealtime, total: totalGajiPokok + totalTunjanganJasa + totalTHRRealtime };
     },
 
     renderReport: function() {
@@ -401,7 +417,7 @@ window.AppKeuanganLaporanKeuangan = {
         // payroll.js). Untuk data LAMA yang belum punya field ini, fallback ke `kategori` supaya
         // tetap terklasifikasi benar tanpa perlu migrasi data.
         var totalOperasional = 0, totalBeliTunai = 0, totalBeliKredit = 0;
-        var totalBayarHutang = 0, totalTHR = 0;
+        var totalBayarHutang = 0, totalTHR = 0, totalTHRPembayaran = 0;
         var totalPPNMasukan = 0;
 
         this.dataPengeluaran.forEach(function(p) {
@@ -415,7 +431,7 @@ window.AppKeuanganLaporanKeuangan = {
             } else if (tipe === 'gaji_payroll') {
                 // sengaja diabaikan sepenuhnya di sini -- sudah terhitung via totalBebanPayroll
             } else if (tipe === 'thr_payroll') {
-                totalTHR += p.jumlah || 0; // beban riil, dipisah dari "Operasional Lain"
+                totalTHR += p.jumlah || 0; totalTHRPembayaran += p.jumlah || 0; // arus kas THR; beban ditentukan dari pembentukan THR
             } else {
                 totalOperasional += p.jumlah || 0;
             }
@@ -444,7 +460,7 @@ window.AppKeuanganLaporanKeuangan = {
 
         // FITUR BARU: Beban Payroll (Gaji + Tunjangan). Sebelumnya laporan ini SAMA SEKALI tidak
         // memasukkan beban gaji karyawan, sehingga Laba Bersih yang ditampilkan tidak realistis.
-        var totalGajiPokok = 0, totalTunjanganJasa = 0;
+        var totalGajiPokok = 0, totalTunjanganJasa = 0, totalTHRTerbentuk = 0;
         this.dataPayroll.forEach(function(g) {
             var gp = g.gajiPokok || 0;
             // payrollHistory baru menyimpan grossPayroll. Data lama direkonstruksi
@@ -454,6 +470,7 @@ window.AppKeuanganLaporanKeuangan = {
                 : (g.totalGaji || 0) + (g.potKasbon || 0) + (g.potWisata || 0);
             totalGajiPokok += gp;
             totalTunjanganJasa += Math.max(0, gross - gp);
+            totalTHRTerbentuk += g.thrBulanIni || 0;
         });
         var totalBebanPayroll = totalGajiPokok + totalTunjanganJasa;
 
@@ -474,7 +491,8 @@ window.AppKeuanganLaporanKeuangan = {
         var totalKasKeluar = totalOperasional + totalTHR + totalBeliTunai + totalBebanPayroll + totalBayarHutang;
         // FIX: labaBersih TIDAK LAGI mengurangi totalBayarHutang (bukan beban -- lihat catatan di
         // atas). totalTHR tetap dikurangi (memang beban riil), hanya dipisah biar jelas sumbernya.
-        var labaBersih = totalLabaKotor - totalOperasional - totalTHR - totalBebanPayroll + totalPemasukanLain + totalPendapatanLain;
+        var bebanTHR = totalTHRTerbentuk > 0 ? totalTHRTerbentuk : totalTHRPembayaran;
+        var labaBersih = totalLabaKotor - totalOperasional - bebanTHR - totalBebanPayroll + totalPemasukanLain + totalPendapatanLain;
 
         // FITUR BARU: perbandingan omzet dengan bulan sebelumnya (pertumbuhan)
         var omzetBulanLalu = 0;
@@ -510,7 +528,8 @@ window.AppKeuanganLaporanKeuangan = {
         });
         daftarHutangJatuhTempo.forEach(function(h) { hutangJatuhTempoBulanIni += h.totalHarga || 0; });
 
-        var labaBersihBayangan = totalLabaKotor - totalOperasional - totalTHR - payrollRealtime.total + totalPemasukanLain + totalPendapatanLain;
+        var bebanTHRBayanganLegacy = totalTHRTerbentuk > 0 ? 0 : totalTHRPembayaran;
+        var labaBersihBayangan = totalLabaKotor - totalOperasional - payrollRealtime.total - bebanTHRBayanganLegacy + totalPemasukanLain + totalPendapatanLain;
         var selisihVsResmi = labaBersihBayangan - labaBersih; // kewajiban yg blm cair tapi sudah kehitung di sini
 
         // Simpan ringkasan supaya bisa dipakai fungsi export tanpa hitung ulang
@@ -520,7 +539,7 @@ window.AppKeuanganLaporanKeuangan = {
             totalModalTindakan: totalModalTindakan,
             cashMasuk: cashMasuk, transferMasuk: transferMasuk, qrisMasuk: qrisMasuk,
             totalOperasional: totalOperasional, totalBeliTunai: totalBeliTunai, totalBeliKredit: totalBeliKredit,
-            totalBayarHutang: totalBayarHutang, totalTHR: totalTHR,
+            totalBayarHutang: totalBayarHutang, totalTHR: bebanTHR, totalTHRTerbentuk: totalTHRTerbentuk, totalTHRPembayaran: totalTHRPembayaran,
             totalGajiPokok: totalGajiPokok, totalTunjanganJasa: totalTunjanganJasa, totalBebanPayroll: totalBebanPayroll,
             totalPemasukanLain: totalPemasukanLain,
             totalPendapatanLain: totalPendapatanLain,

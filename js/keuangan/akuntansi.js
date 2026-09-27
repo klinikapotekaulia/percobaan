@@ -33,6 +33,7 @@ window.AppKeuanganAkuntansi = {
         '4-1300': { nama: 'Pendapatan Jasa Tindakan Medis', kategori: 'Pendapatan', saldoNormal: 'Kredit' },
         '4-1400': { nama: 'Pendapatan Jasa Resep / Racik', kategori: 'Pendapatan', saldoNormal: 'Kredit' },
         '4-1500': { nama: 'Pendapatan Lain-lain', kategori: 'Pendapatan', saldoNormal: 'Kredit' },
+        '4-1600': { nama: 'Keuntungan Penyesuaian Persediaan', kategori: 'Pendapatan', saldoNormal: 'Kredit' },
         '5-1100': { nama: 'HPP Obat Non-PPN', kategori: 'Beban', saldoNormal: 'Debit' },
         '5-1200': { nama: 'HPP Obat PPN', kategori: 'Beban', saldoNormal: 'Debit' },
         '5-2100': { nama: 'Beban Gaji Karyawan', kategori: 'Beban', saldoNormal: 'Debit' },
@@ -40,6 +41,7 @@ window.AppKeuanganAkuntansi = {
         '5-2300': { nama: 'Beban Operasional (Listrik, ATK)', kategori: 'Beban', saldoNormal: 'Debit' },
         '5-2400': { nama: 'Beban Penyusutan Aset', kategori: 'Beban', saldoNormal: 'Debit' },
         '5-2500': { nama: 'Beban PPN Masukan', kategori: 'Beban', saldoNormal: 'Debit' },
+        '5-2600': { nama: 'Beban Selisih Persediaan', kategori: 'Beban', saldoNormal: 'Debit' },
         '5-3000': { nama: 'Beban Lain-lain', kategori: 'Beban', saldoNormal: 'Debit' }
     },
 
@@ -118,8 +120,9 @@ window.AppKeuanganAkuntansi = {
         var pMutasi = db.collection('mutasiRekening').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
         var pTHRPenyisihan = db.collection('thrPenyisihan').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
         var pTHRPembayaran = db.collection('thrPembayaranHistory').where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(new Date(startDate + 'T00:00:00'))).where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(new Date(endDate + 'T23:59:59'))).get().catch(function() { return []; });
+        var pStockOpname = db.collection('stockOpnameHistory').where('tanggal', '>=', startDate).where('tanggal', '<=', endDate).get().catch(function() { return []; });
 
-        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi, pTHRPembayaran, pTHRPenyisihan, pRetur]).then(function(results) {
+        Promise.all([pTrx, pKasKeluar, pBeliStok, pGaji, pJurnalManual, pSaldoAwal, pPendapatanLain, pMutasi, pTHRPembayaran, pTHRPenyisihan, pRetur, pStockOpname]).then(function(results) {
             self.dataJurnal = [];
             self.dataSaldoAwal = [];
             // MEMO (bukan bagian jurnal resmi): simpan transaksi mentah bulan berjalan supaya
@@ -232,6 +235,26 @@ window.AppKeuanganAkuntansi = {
                 var akunKredit = b.metodePembayaran === 'kredit' ? '2-1100' : (b.metodePembayaran === 'tunai' ? '1-1100' : '1-1200');
                 self.dataJurnal.push({ tanggal: b.tanggal, keterangan: b.metodePembayaran === 'kredit' ? 'Pengakuan Hutang Supplier' : 'Pembayaran ke Supplier', akunDebit: '', akunKredit: akunKredit, debit: 0, kredit: b.totalHarga || 0, isManual: false, tipeJurnal: 'Otomatis' });
             });
+
+            // Jurnal otomatis penyesuaian persediaan dari Stock Opname.
+            // Nilai selisih memakai HPP tersimpan pada saat opname diajukan.
+            if (results[11] && results[11].forEach) {
+                results[11].forEach(function(doc) {
+                    var req = doc.data();
+                    (req.items || []).forEach(function(it) {
+                        var nilai = Math.abs(parseFloat(it.nilaiSelisih) || 0);
+                        if (nilai <= 0) return;
+                        var ket = 'Penyesuaian Persediaan - Stock Opname - ' + (it.namaObat || it.obatId || '-');
+                        if ((it.selisih || 0) > 0) {
+                            self.dataJurnal.push({ tanggal: req.tanggal, keterangan: ket, akunDebit: (it.isPPN ? '1-1410' : '1-1400'), akunKredit: '', debit: nilai, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                            self.dataJurnal.push({ tanggal: req.tanggal, keterangan: ket, akunDebit: '', akunKredit: '4-1600', debit: 0, kredit: nilai, isManual: false, tipeJurnal: 'Otomatis' });
+                        } else {
+                            self.dataJurnal.push({ tanggal: req.tanggal, keterangan: ket, akunDebit: '5-2600', akunKredit: '', debit: nilai, kredit: 0, isManual: false, tipeJurnal: 'Otomatis' });
+                            self.dataJurnal.push({ tanggal: req.tanggal, keterangan: ket, akunDebit: '', akunKredit: (it.isPPN ? '1-1410' : '1-1400'), debit: 0, kredit: nilai, isManual: false, tipeJurnal: 'Otomatis' });
+                        }
+                    });
+                });
+            }
 
             // Jurnal Otomatis Pengeluaran Kas
             results[1].forEach(function(doc) {

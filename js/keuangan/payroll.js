@@ -1,7 +1,7 @@
 /**
  * js/keuangan/payroll.js
  * Proses Payroll (Gaji & Pembagian Hasil)
- * Logic akurat: Pecahan Jasa Resep, Tuslah, Omzet, Uang Makan, Transport, Racik.
+ * Logic akurat: Pecahan Jasa Resep, Jasa Resep Luar, Tuslah, Omzet, Uang Makan, Transport, Racik.
  *
  * SINKRONISASI LAPORAN & PENGGAJIAN BULAN SEBELUMNYA:
  * - Mendorong pemilihan Bulan Payroll (mis. Juli 2026) & Batas Cut-off Tanggal.
@@ -315,14 +315,27 @@ window.AppKeuanganPayroll = {
             }
 
             if (rawName) {
-                var cleanName = rawName.toLowerCase().replace(/^(dr\.|dokter)\s*/i, '').trim();
+                var cleanName = rawName.toLowerCase()
+                    .replace(/^(dr\.|dokter)\s*/i, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+                // Utamakan nama yang benar-benar sama agar dokter dengan nama mirip
+                // tidak tertukar. Fallback ke kecocokan sebagian hanya jika hasilnya unik.
+                var partialMatches = [];
                 for (var j = 0; j < this.dataKaryawan.length; j++) {
                     var k2 = this.dataKaryawan[j];
-                    var kCleanName = (k2.nama || '').toLowerCase().replace(/^(dr\.|dokter)\s*/i, '').trim();
-                    if (kCleanName && cleanName && (kCleanName === cleanName || cleanName.indexOf(kCleanName) !== -1 || kCleanName.indexOf(cleanName) !== -1)) {
-                        return k2.id;
+                    var kCleanName = (k2.nama || '').toLowerCase()
+                        .replace(/^(dr\.|dokter)\s*/i, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    if (!kCleanName || !cleanName) continue;
+                    if (kCleanName === cleanName) return k2.id;
+                    if (cleanName.indexOf(kCleanName) !== -1 || kCleanName.indexOf(cleanName) !== -1) {
+                        partialMatches.push(k2);
                     }
                 }
+                if (partialMatches.length === 1) return partialMatches[0].id;
             }
         }
 
@@ -773,6 +786,7 @@ window.AppKeuanganPayroll = {
         html += '<th class="px-2 py-3 text-right">Gaji Pokok</th>';
         html += '<th class="px-2 py-3 text-right">JM</th>';
         html += '<th class="px-2 py-3 text-right">JD</th>';
+        html += '<th class="px-2 py-3 text-right">Jasa Resep Luar</th>';
         html += '<th class="px-2 py-3 text-right">Pool Klinik</th>';
         html += '<th class="px-2 py-3 text-right">Pool Apotek</th>';
         html += '<th class="px-2 py-3 text-right">Tuslah</th>';
@@ -790,7 +804,7 @@ window.AppKeuanganPayroll = {
         html += '</tr></thead><tbody>';
 
         if (this.kalkulasiGaji.length === 0) {
-            html += '<tr><td colspan="20" class="text-center py-6 text-slate-400">Tidak ada karyawan aktif.</td></tr>';
+            html += '<tr><td colspan="21" class="text-center py-6 text-slate-400">Tidak ada karyawan aktif.</td></tr>';
         } else {
             this.kalkulasiGaji.forEach(function(k, idx) {
                 html += '<tr class="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">';
@@ -800,6 +814,7 @@ window.AppKeuanganPayroll = {
                 html += '<td class="px-2 py-2 text-right text-slate-600 dark:text-slate-300">' + Utils.formatRupiah(k.gajiPokok) + '</td>';
                 html += '<td class="px-2 py-2 text-right text-blue-600">' + Utils.formatRupiah(k.jasaMedis) + '</td>';
                 html += '<td class="px-2 py-2 text-right text-blue-600">' + Utils.formatRupiah(k.jasaDokter) + '</td>';
+                html += '<td class="px-2 py-2 text-right text-blue-600">' + Utils.formatRupiah(k.jasaResepLuar) + '</td>';
                 html += '<td class="px-2 py-2 text-right text-purple-600">' + Utils.formatRupiah(k.bagPoolKlinik) + '</td>';
                 html += '<td class="px-2 py-2 text-right text-teal-600">' + Utils.formatRupiah(k.bagPoolApotek) + '</td>';
                 html += '<td class="px-2 py-2 text-right text-purple-600">' + Utils.formatRupiah(k.bagTuslah) + '</td>';
@@ -905,6 +920,7 @@ window.AppKeuanganPayroll = {
         html += '<tr><td>Gaji Pokok</td><td class="right">' + Utils.formatRupiah(h.gajiPokok || 0) + '</td></tr>';
         if((h.jasaMedis || 0) > 0) html += '<tr><td>Jasa Medis (JM)</td><td class="right">' + Utils.formatRupiah(h.jasaMedis) + '</td></tr>';
         if((h.jasaDokter || 0) > 0) html += '<tr><td>Jasa Dokter (JD)</td><td class="right">' + Utils.formatRupiah(h.jasaDokter) + '</td></tr>';
+        if((h.jasaResepLuar || 0) > 0) html += '<tr><td>Jasa Resep Luar</td><td class="right">' + Utils.formatRupiah(h.jasaResepLuar) + '</td></tr>';
         if((h.bagPoolKlinik || 0) > 0) html += '<tr><td>Pool Resep Klinik</td><td class="right">' + Utils.formatRupiah(h.bagPoolKlinik) + '</td></tr>';
         if((h.bagPoolApotek || 0) > 0) html += '<tr><td>Pool Resep Apotek</td><td class="right">' + Utils.formatRupiah(h.bagPoolApotek) + '</td></tr>';
         if((h.bagTuslah || 0) > 0) html += '<tr><td>Tuslah/Tindakan</td><td class="right">' + Utils.formatRupiah(h.bagTuslah) + '</td></tr>';
@@ -915,7 +931,7 @@ window.AppKeuanganPayroll = {
         if((h.tunjanganLain || 0) > 0) html += '<tr><td>Tunjangan Lain</td><td class="right">' + Utils.formatRupiah(h.tunjanganLain) + '</td></tr>';
         html += '</table><hr>';
 
-        var subTotal = (h.gajiPokok || 0) + (h.jasaMedis || 0) + (h.jasaDokter || 0) + (h.bagPoolKlinik || 0) + (h.bagPoolApotek || 0) + (h.bagTuslah || 0) + (h.bagOmzet || 0) + (h.bagUM || 0) + (h.bagTransport || 0) + (h.bagRacik || 0) + (h.tunjanganLain || 0);
+        var subTotal = (h.gajiPokok || 0) + (h.jasaMedis || 0) + (h.jasaDokter || 0) + (h.jasaResepLuar || 0) + (h.bagPoolKlinik || 0) + (h.bagPoolApotek || 0) + (h.bagTuslah || 0) + (h.bagOmzet || 0) + (h.bagUM || 0) + (h.bagTransport || 0) + (h.bagRacik || 0) + (h.tunjanganLain || 0);
         html += '<table>';
         html += '<tr class="bold"><td>TOTAL PENDAPATAN</td><td class="right">' + Utils.formatRupiah(subTotal) + '</td></tr>';
         html += '</table><hr>';
@@ -1053,6 +1069,7 @@ window.AppKeuanganPayroll = {
                 gajiPokok: k.gajiPokok,
                 jasaMedis: k.jasaMedis,
                 jasaDokter: k.jasaDokter,
+                jasaResepLuar: k.jasaResepLuar,
                 bagPoolKlinik: k.bagPoolKlinik,
                 bagPoolApotek: k.bagPoolApotek,
                 bagTuslah: k.bagTuslah,

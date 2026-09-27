@@ -962,7 +962,9 @@ window.AppKeuanganPayroll = {
             return (p.status || 'posted') === 'posted';
         });
         var saldoDanaTHR = penyisihan.reduce(function(sum, p) {
-            return sum + (parseFloat(p.jumlah) || 0);
+            var jumlah = parseFloat(p.jumlah) || 0;
+            var jenis = p.jenis || 'penyisihan';
+            return sum + (jenis === 'pembayaran' || p.arah === 'keluar' ? -jumlah : jumlah);
         }, 0);
         var penyisihanBulanIni = penyisihan.filter(function(p) {
             return (p.bulan || '').slice(0, 7) === self.selectedTargetBulan;
@@ -1023,10 +1025,12 @@ window.AppKeuanganPayroll = {
         html += '<div class="bg-white dark:bg-slate-800 border rounded-xl overflow-hidden mb-5"><div class="p-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-slate-800 dark:text-white">Riwayat Penyisihan Dana THR</h3><p class="text-xs text-slate-500">Penyisihan bulan ' + this.selectedTargetBulan + ': ' + Utils.formatRupiah(penyisihanBulanIni) + '</p></div></div><div class="overflow-x-auto"><table class="w-full text-sm">';
         html += '<thead><tr class="bg-slate-50 dark:bg-slate-900 text-xs uppercase text-slate-500"><th class="px-4 py-3 text-left">Tanggal</th><th class="px-4 py-3 text-left">Sumber</th><th class="px-4 py-3 text-right">Jumlah</th><th class="px-4 py-3 text-left">Keterangan</th></tr></thead><tbody>';
         var reserves = penyisihan.slice().sort(function(a,b) { return (b.tanggal || '').localeCompare(a.tanggal || ''); });
-        if (!reserves.length) html += '<tr><td colspan="4" class="text-center py-6 text-slate-400">Belum ada penyisihan dana THR.</td></tr>';
+        if (!reserves.length) html += '<tr><td colspan="4" class="text-center py-6 text-slate-400">Belum ada mutasi Dana THR.</td></tr>';
         reserves.slice(0, 50).forEach(function(p) {
-            var sumber = p.akunSumber === '1-1200' ? 'Bank / Transfer / QRIS' : 'Kas Utama';
-            html += '<tr class="border-t dark:border-slate-700"><td class="px-4 py-3">' + Utils.escapeHtml(p.tanggal || '-') + '</td><td class="px-4 py-3">' + sumber + '</td><td class="px-4 py-3 text-right font-semibold">' + Utils.formatRupiah(p.jumlah || 0) + '</td><td class="px-4 py-3">' + Utils.escapeHtml(p.keterangan || '-') + '</td></tr>';
+            var sumber = p.akunSumber === '1-1200' ? 'Bank / Transfer / QRIS' : (p.jenis === 'pembayaran' ? 'Dana THR' : 'Kas Utama');
+            var jenis = p.jenis === 'pembayaran' || p.arah === 'keluar' ? 'Pembayaran THR' : 'Penyisihan';
+            var jumlahTampil = (p.jenis === 'pembayaran' || p.arah === 'keluar' ? -1 : 1) * (parseFloat(p.jumlah) || 0);
+            html += '<tr class="border-t dark:border-slate-700"><td class="px-4 py-3">' + Utils.escapeHtml(p.tanggal || '-') + '</td><td class="px-4 py-3">' + jenis + ' · ' + sumber + '</td><td class="px-4 py-3 text-right font-semibold ' + (jumlahTampil < 0 ? 'text-red-600' : 'text-emerald-600') + '">' + (jumlahTampil < 0 ? '-' : '+') + Utils.formatRupiah(Math.abs(jumlahTampil)) + '</td><td class="px-4 py-3">' + Utils.escapeHtml(p.keterangan || '-') + '</td></tr>';
         });
         html += '</tbody></table></div></div>';
 
@@ -1389,15 +1393,25 @@ window.AppKeuanganPayroll = {
         var k = this.kalkulasiGaji[idx];
         if (!k || k.thrSaldoSebelum <= 0) return;
 
-        // Hanya saldo THR yang SUDAH terbentuk di thrTabungan yang boleh dibayarkan.
-        // thrSaldoProyeksi juga memuat THR bulan berjalan yang belum diposting sampai
-        // payroll benar-benar dibayarkan, sehingga membayar proyeksi akan membayar
-        // kewajiban yang belum pernah terbentuk.
-        var thrYangDibayar = k.thrSaldoSebelum;
-        var bulan = this.selectedTargetBulan || Utils.today().slice(0, 7);
-        if (!confirm('Bayarkan THR tersimpan ' + k.nama + ' sebesar ' + Utils.formatRupiah(thrYangDibayar) + ' dan reset tabungan menjadi Rp 0?')) return;
+        // Pembayaran hanya boleh memakai Dana THR yang benar-benar sudah disisihkan.
+        var saldoDanaTHR = (this.dataTHRPenyisihan || []).filter(function(p) {
+            return (p.status || 'posted') === 'posted';
+        }).reduce(function(sum, p) {
+            var jumlah = parseFloat(p.jumlah) || 0;
+            var jenis = p.jenis || 'penyisihan';
+            return sum + (jenis === 'pembayaran' || p.arah === 'keluar' ? -jumlah : jumlah);
+        }, 0);
 
-        Utils.toast('Memproses pembayaran THR...', 'info');
+        var thrYangDibayar = k.thrSaldoSebelum;
+        if (saldoDanaTHR < thrYangDibayar) {
+            Utils.toast('Dana THR belum mencukupi. Saldo Dana THR saat ini ' + Utils.formatRupiah(saldoDanaTHR) + ', sedangkan pembayaran membutuhkan ' + Utils.formatRupiah(thrYangDibayar) + '.', 'error');
+            return;
+        }
+
+        var bulan = this.selectedTargetBulan || Utils.today().slice(0, 7);
+        if (!confirm('Bayarkan THR tersimpan ' + k.nama + ' sebesar ' + Utils.formatRupiah(thrYangDibayar) + '? Saldo Dana THR akan otomatis berkurang dan tabungan karyawan menjadi Rp 0.')) return;
+
+        Utils.toast('Memproses pembayaran THR dari Dana THR...', 'info');
         var batch = db.batch();
 
         var thrRef = db.collection('thrTabungan').doc(k.karyawanId);
@@ -1414,37 +1428,55 @@ window.AppKeuanganPayroll = {
             namaKaryawan: k.nama,
             jumlah: thrYangDibayar,
             bulanDibayarkan: bulan,
+            tanggalBayar: Utils.today(),
             dibayarkanOleh: window.currentUserName || 'Keuangan',
+            sumberDana: '1-1600',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        // Catat pengeluaran kas THR
-        // FIX (LABEL MENYESATKAN): dulu tercampur generik jadi "Biaya Operasional Lain". THR tetap
-        // beban riil (dan TIDAK dobel hitung, karena tidak masuk payrollHistory) -- tapi ditandai
-        // `tipeArusKas` di bawah supaya laporanKeuangan.js & dashboardKeuangan.js bisa menampilkannya
-        // sbg baris "Beban THR" tersendiri, bukan tersembunyi di "Biaya Operasional Lain".
+        // Mutasi keluar dari aset Dana THR. Ini membuat saldo aset 1-1600 berkurang
+        // dan mencegah pembayaran yang sama kembali mengurangi Kas/Bank.
+        var danaRef = db.collection('thrPenyisihan').doc();
+        batch.set(danaRef, {
+            tanggal: Utils.today(),
+            bulan: bulan,
+            jenis: 'pembayaran',
+            arah: 'keluar',
+            akunSumber: '1-1600',
+            akunTujuan: '1-1600',
+            jumlah: thrYangDibayar,
+            status: 'posted',
+            karyawanId: k.karyawanId,
+            namaKaryawan: k.nama,
+            keterangan: 'Pembayaran THR dari Dana THR untuk ' + k.nama,
+            diprosesOleh: window.currentUserName || 'Keuangan',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Tetap simpan jejak pengeluaran THR untuk histori/arus kas, tetapi tidak
+        // dijurnal sebagai pengurangan Kas karena kas sudah berkurang saat penyisihan.
         var kasRef = db.collection('kasKeluar').doc();
         batch.set(kasRef, {
             tanggal: Utils.today(),
             bulan: bulan,
             kategori: 'Tunjangan Hari Raya (THR)',
             kategoriId: 'thr',
-            tipeArusKas: 'thr_payroll',
-            akunKas: 'Kas Utama / Bank',
+            tipeArusKas: 'thr_payroll_dana_thr',
+            akunKas: 'Dana Disisihkan THR',
             jumlah: thrYangDibayar,
             penerima: k.nama,
-            keterangan: 'Pembayaran THR & Tabungan THR untuk ' + k.nama,
+            keterangan: 'Pembayaran THR dari Dana THR untuk ' + k.nama,
             status: 'approved',
-            sumber: 'payroll_thr',
+            sumber: 'payroll_thr_dana_thr',
             diprosesOleh: window.currentUserName || 'Keuangan',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
         batch.commit().then(function() {
-            Utils.toast('THR ' + k.nama + ' berhasil dibayarkan &amp; direset.', 'success');
+            Utils.toast('THR ' + k.nama + ' berhasil dibayarkan. Saldo Dana THR otomatis berkurang.', 'success');
             AuditLog.catat({
                 aksi: 'bayar', modul: 'Payroll - THR', koleksi: 'thrPembayaranHistory', targetId: k.karyawanId,
-                deskripsi: 'Bayar THR: ' + k.nama, nominal: thrYangDibayar
+                deskripsi: 'Bayar THR dari Dana THR: ' + k.nama, nominal: thrYangDibayar
             });
             self.init();
         }).catch(function(err) {

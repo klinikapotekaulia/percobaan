@@ -47,10 +47,16 @@ window.SubmitGuard = {
     document.head.appendChild(s);
 })();
 
-// Keep exactly one Etalase entry in each rendered sidebar.
-// Older builds could inject a second "Etalase Haypop" button after app.js
-// rendered the canonical Etalase menu. This cleanup only affects sidebar DOM;
-// it does not alter transaction, sales, or financial Etalase data.
+// Disable the legacy second Etalase menu and prevent its renderSidebar patch.
+(function () {
+    var s = document.createElement('script');
+    s.src = 'js/utils/etalaseMenuGuard.js';
+    s.onload = function () { console.info('[Etalase] duplicate menu guard loaded'); };
+    s.onerror = function () { console.warn('[Etalase] duplicate menu guard failed to load'); };
+    document.head.appendChild(s);
+})();
+
+// Keep exactly one Etalase entry in each rendered sidebar as a safety net.
 (function () {
     function normalizeEtalaseMenu() {
         ['sidebar-menu', 'mobile-sidebar-menu'].forEach(function (id) {
@@ -64,8 +70,7 @@ window.SubmitGuard = {
             if (matches.length <= 1) return;
             matches.slice(1).forEach(function (btn) {
                 var item = btn.closest('li') || btn.parentElement;
-                if (item && item.parentElement === root) item.remove();
-                else btn.remove();
+                if (item) item.remove();
             });
         });
     }
@@ -74,7 +79,11 @@ window.SubmitGuard = {
     setTimeout(normalizeEtalaseMenu, 0);
 })();
 
-// Sidebar navigation does not need a second event system. The native navigation
-// buttons rendered by app.js use their own single onclick handler. Keeping a
-// second global click/capture layer here caused competing handlers and made the
-// first click unreliable.
+// Sidebar navigation hardening is loaded globally because the sidebar is rendered dynamically.
+(function () {
+    var s = document.createElement('script');
+    s.src = 'js/utils/sidebarFix.js';
+    s.onload = function () { console.info('[Sidebar] single-click navigation guard loaded'); };
+    s.onerror = function () { console.warn('[Sidebar] navigation guard failed to load'); };
+    document.head.appendChild(s);
+})();

@@ -67,7 +67,31 @@ service cloud.firestore {
     match /thrPenyisihan/{id} { allow read, write: if isAdminKeuangan() || hasRole(['psa']); }
     match /persediaanSnapshot/{id} { allow read, write: if isAdminKeuangan() || hasRole(['psa']); }
     match /kasMasuk/{id} { allow read, write: if isAdminKeuanganPSA(); }
+    // Koleksi lama dipertahankan untuk kompatibilitas data historis.
     match /mutasiRekening/{id} { allow read, write: if isAdminKeuanganPSA(); }
+
+    // MUTASI SALDO: akun Kas/Rekening dan ledger perpindahan dana internal.
+    // Mutasi tidak boleh menjadi pendapatan/biaya; perubahan saldo dua akun
+    // dilakukan oleh aplikasi dalam satu Firestore transaction.
+    match /rekeningSaldo/{id} {
+      allow read: if isAdminKeuanganPSA();
+      allow create, update: if isAdminKeuanganPSA();
+      allow delete: if isAdminKeuanganPSA() && id != 'kas';
+    }
+    match /mutasiSaldo/{id} {
+      allow read: if isAdminKeuanganPSA();
+      allow create: if isAdminKeuanganPSA()
+                    && request.resource.data.tipe == 'transfer_internal'
+                    && request.resource.data.dariId is string
+                    && request.resource.data.keId is string
+                    && request.resource.data.dariId != request.resource.data.keId
+                    && request.resource.data.nominal is number
+                    && request.resource.data.nominal > 0
+                    && request.resource.data.tanggal is string;
+      // Ledger mutasi sengaja immutable. Koreksi dilakukan dengan mutasi pembalik.
+      allow update, delete: if false;
+    }
+
     match /groupChat/{id} { allow read: if isActive(); allow create: if isActive() && request.resource.data.senderId == request.auth.uid; allow update, delete: if isActive() && (resource.data.senderId == request.auth.uid || isAdminKeuanganPSA()); }
     match /chatReadStatus/{uid} { allow read, write: if isActive() && request.auth.uid == uid; }
     match /auditLog/{id} { allow read: if isAdminKeuangan() || hasRole(['psa']); allow create: if isActive() && request.resource.data.olehUid == request.auth.uid; allow update, delete: if false; }
@@ -76,7 +100,7 @@ service cloud.firestore {
     match /pengaturan/profil { allow read: if isAnyStaff(); allow write: if isAdminKeuanganPSA(); }
     match /pengaturan/satusehatSettings { allow read, write: if isAdminKeuanganPSA(); }
     match /pengaturan/psaInvestasi { allow read, write: if isAdminKeuanganPSA(); }
-    match /pengaturan/landing { allow read: if true; allow write: if hasRole(['keuangan', 'psa']); }
+    match /pengaturan/landing { allow read: true; allow write: if hasRole(['keuangan', 'psa']); }
     match /pengaturanGaji/{id} { allow read, write: if isAdminKeuanganPSA(); }
     match /pengaturanPembagian/{id} { allow read: if isApotekStaff() || isKlinikStaff(); allow write: if isAdminKeuangan(); }
     match /pengaturanPembagianHistory/{id} { allow read: if isAdminKeuangan(); allow create: if isAdminKeuangan(); allow update, delete: if false; }

@@ -31,29 +31,27 @@ service cloud.firestore {
     match /karyawan/{id} { allow read: if isAnyStaff(); allow create, update, delete: if hasRole(['keuangan', 'psa']); }
 
     // ABSENSI: scan hanya Admin/PSA/Keuangan; role lain hanya membaca miliknya sendiri.
-    // PSA/Keuangan dapat membuat atau mengubah koreksi. Tidak ada check-out.
     match /absensi/{id} {
       allow read: if isAdminKeuanganPSA() || (isActive() && resource.data.userId == request.auth.uid);
-      allow create: if isAdminKeuanganPSA()
-                    && request.resource.data.metode == 'qr-admin'
-                    && request.resource.data.inputOlehUid == request.auth.uid
-                    && request.resource.data.checkOut == null
-                    && request.resource.data.karyawanId is string
-                    && request.resource.data.tanggal is string;
-      allow create: if hasRole(['psa', 'keuangan'])
-                    && request.resource.data.metode == 'manual-koreksi'
-                    && request.resource.data.dikoreksiOlehUid == request.auth.uid
-                    && request.resource.data.checkOut == null
-                    && request.resource.data.karyawanId is string
-                    && request.resource.data.tanggal is string;
-      allow update: if hasRole(['psa', 'keuangan'])
-                    && request.resource.data.metode == 'manual-koreksi'
-                    && request.resource.data.dikoreksiOlehUid == request.auth.uid
-                    && request.resource.data.checkOut == null
-                    && request.resource.data.karyawanId == resource.data.karyawanId
-                    && request.resource.data.userId == resource.data.userId
-                    && request.resource.data.tanggal == resource.data.tanggal;
+      allow create: if isAdminKeuanganPSA() && request.resource.data.metode == 'qr-admin' && request.resource.data.inputOlehUid == request.auth.uid && request.resource.data.checkOut == null && request.resource.data.karyawanId is string && request.resource.data.tanggal is string;
+      allow create: if hasRole(['psa', 'keuangan']) && request.resource.data.metode == 'manual-koreksi' && request.resource.data.dikoreksiOlehUid == request.auth.uid && request.resource.data.checkOut == null && request.resource.data.karyawanId is string && request.resource.data.tanggal is string;
+      allow update: if hasRole(['psa', 'keuangan']) && request.resource.data.metode == 'manual-koreksi' && request.resource.data.dikoreksiOlehUid == request.auth.uid && request.resource.data.checkOut == null && request.resource.data.karyawanId == resource.data.karyawanId && request.resource.data.userId == resource.data.userId && request.resource.data.tanggal == resource.data.tanggal;
       allow delete: if false;
+    }
+
+    // HAYPOP ETALASE: produk/harga hanya Keuangan. Produk aktif dapat dibaca
+    // kasir apotek dan Keuangan. Penjualan dibuat atomik bersama transaksi.
+    match /etalaseProduk/{id} {
+      allow read: if hasRole(['apotek', 'keuangan']);
+      allow create, update, delete: if hasRole(['keuangan']);
+    }
+    match /etalasePenjualan/{id} {
+      allow read: if hasRole(['apotek', 'keuangan']);
+      allow create: if hasRole(['apotek', 'keuangan'])
+                    && request.resource.data.transaksiId is string
+                    && request.resource.data.total is number
+                    && request.resource.data.total > 0;
+      allow update, delete: if hasRole(['keuangan']);
     }
 
     match /jurnalManual/{id} { allow read, write: if isAdminKeuangan(); }

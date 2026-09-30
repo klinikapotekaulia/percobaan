@@ -1,436 +1,64 @@
 /**
  * js/manajemen/absensi.js
- * Absensi Harian Karyawan (Check-in / Check-out & Manual Input)
+ * Absensi: QR check-in oleh Admin/PSA/Keuangan; rekap pribadi untuk role lain.
+ * Tidak ada check-out. PSA & Keuangan dapat mengoreksi absensi pada tanggal tertentu.
  */
-
 window.AppManajemenAbsensi = {
     data: [],
     karyawanList: [],
-    // FIX: gunakan tanggal lokal (WIB) bukan UTC, supaya tidak mundur 1 hari saat dini hari.
-    todayStr: (function(){ var d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().split('T')[0]; })(),
-
-    render: function() {
-        var role = window.currentRole || 'apotek';
-        var isStaff = (role === 'klinik' || role === 'apotek' || role === 'admin');
-        var canScanQr = (role === 'admin' || role === 'keuangan' || role === 'psa');
-
-        var html = '<div class="page-enter max-w-5xl">';
-        html += '  <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-1">Absensi Karyawan</h2>';
-        html += '  <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Rekap kehadiran tanggal ' + new Date(this.todayStr).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</p>';
-        
-        // Kartu Absensi Diri (Untuk Klinik & Apotek)
-        if (isStaff) {
-            html += '<div id="my-absensi-card" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">';
-            html += '<div class="text-center sm:text-left"><h3 class="font-semibold text-gray-800 dark:text-white">Absensi Kamu Hari Ini</h3><p class="text-xs text-slate-400 mt-1" id="my-status">Memuat status...</p></div>';
-            html += '<div id="my-absensi-btn" class="flex gap-2"><!-- Tombol akan diisi via JS --></div>';
-            html += '</div>';
-        }
-
-        // FITUR BARU: tombol Input Manual sekarang hanya tersedia untuk akun PSA dan Keuangan (permintaan user).
-        if (role === 'psa' || role === 'keuangan') {
-            html += '<div class="flex justify-end mb-4">';
-            html += '<button onclick="AppManajemenAbsensi.openManualForm()" class="bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition flex items-center gap-2"><i data-lucide="user-plus" class="w-4 h-4"></i> Input Manual Absen</button>';
-            html += '</div>';
-        }
-
-        if (canScanQr) {
-            html += '<div class="flex justify-end mb-4"><button onclick="AppManajemenAbsensi.openQrScanner()" class="bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition flex items-center gap-2"><i data-lucide="scan-line" class="w-4 h-4"></i> Scan QR Karyawan</button></div>';
-        }
-        html += '  <div id="absensi-list"><div class="flex justify-center py-10"><div class="spinner"></div></div></div>';
-        html += '</div>';
-        return html;
+    selectedMonth: (function(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); })(),
+    todayStr: function(){ var d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().split('T')[0]; },
+    canScan: function(){ return ['admin','psa','keuangan'].indexOf(window.currentRole || '') !== -1; },
+    canEdit: function(){ return ['psa','keuangan'].indexOf(window.currentRole || '') !== -1; },
+    isPrivileged: function(){ return this.canScan(); },
+    monthRange: function(month){ var p=(month||this.selectedMonth).split('-').map(Number), y=p[0], m=p[1]; var last=new Date(y,m,0).getDate(); return { start:y+'-'+String(m).padStart(2,'0')+'-01', end:y+'-'+String(m).padStart(2,'0')+'-'+String(last).padStart(2,'0'), days:last }; },
+    monthLabel: function(month){ var p=(month||this.selectedMonth).split('-').map(Number); return new Date(p[0],p[1]-1,1).toLocaleDateString('id-ID',{month:'long',year:'numeric'}); },
+    escape: function(v){ return Utils.escapeHtml(String(v==null?'':v)); },
+    render: function(){
+        var html='<div class="page-enter max-w-6xl">';
+        html+='<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5"><div><h2 class="text-xl font-bold text-gray-800 dark:text-white mb-1">Absensi Karyawan</h2><p class="text-sm text-slate-500 dark:text-slate-400">'+(this.isPrivileged()?'Kelola absensi dan scan QR.':'Lihat status absensi Anda.')+'</p></div><div class="flex items-center gap-2"><label class="text-sm text-slate-500">Bulan</label><input id="absensi-month" type="month" value="'+this.selectedMonth+'" onchange="AppManajemenAbsensi.changeMonth(this.value)" class="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg text-sm"></div></div>';
+        if(this.canScan()){ html+='<div class="flex flex-wrap gap-2 justify-end mb-4"><button onclick="AppManajemenAbsensi.openQrScanner()" class="bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2"><i data-lucide="scan-line" class="w-4 h-4"></i> Scan QR Absen</button>'; if(this.canEdit()) html+='<button onclick="AppManajemenAbsensi.openCorrectionForm()" class="bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2"><i data-lucide="calendar-cog" class="w-4 h-4"></i> Koreksi Absen</button>'; html+='</div>'; }
+        html+='<div id="absensi-list"><div class="flex justify-center py-10"><div class="spinner"></div></div></div></div>'; return html;
     },
-
-    init: function() {
-        var self = this;
-        var pKaryawan = db.collection('karyawan').where('status', '==', 'aktif').get();
-        var pAbsensi = db.collection('absensi').where('tanggal', '==', self.todayStr).get();
-
-        Promise.all([pKaryawan, pAbsensi]).then(function(results) {
-            self.karyawanList = [];
-            results[0].forEach(function(doc) { var d = doc.data(); d.id = doc.id; self.karyawanList.push(d); });
-
-            self.data = [];
-            results[1].forEach(function(doc) { var d = doc.data(); d.id = doc.id; self.data.push(d); });
-
-            // Urutkan list berdasarkan nama
-            self.data.sort(function(a, b) { return (a.namaKaryawan || '').localeCompare(b.namaKaryawan || ''); });
-
-            self.renderList();
-            
-            // Render tombol absensi diri jika staff
-            if (window.currentRole === 'klinik' || window.currentRole === 'apotek' || window.currentRole === 'admin') {
-                self.renderMyAbsensi();
-            }
-        }).catch(err => Utils.toast('Gagal memuat: ' + err.message, 'error'));
-    },
-
-    _qrStream: null,
-    _qrFrame: null,
-
-    openQrScanner: function() {
-        var role = window.currentRole || '';
-        if (role !== 'admin' && role !== 'keuangan' && role !== 'psa') {
-            Utils.toast('Anda tidak memiliki akses scan QR absensi.', 'error');
-            return;
-        }
-        if (typeof jsQR === 'undefined') {
-            Utils.toast('Library scanner QR belum berhasil dimuat. Coba refresh halaman.', 'error');
-            return;
-        }
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            Utils.toast('Browser/perangkat ini tidak menyediakan akses kamera.', 'error');
-            return;
-        }
-
-        this._stopQrScanner();
-
-        var html = '<div class="p-5">';
-        html += '<div class="flex items-center justify-between mb-4"><div><h3 class="text-lg font-bold text-gray-800 dark:text-white">Scan QR Absensi</h3><p class="text-xs text-slate-400 mt-1">Arahkan kamera ke QR pegawai.</p></div><button onclick="AppManajemenAbsensi._stopQrScanner(); Utils.closeModal();" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><i data-lucide="x" class="w-5 h-5 text-slate-400"></i></button></div>';
-        html += '<div class="relative overflow-hidden rounded-2xl bg-black aspect-square max-w-md mx-auto">';
-        html += '<video id="qr-camera" autoplay playsinline muted class="w-full h-full object-cover"></video>';
-        html += '<div class="absolute inset-8 border-2 border-white/80 rounded-xl pointer-events-none"></div>';
-        html += '<canvas id="qr-canvas" class="hidden"></canvas></div>';
-        html += '<p id="qr-scan-status" class="text-center text-sm text-slate-500 dark:text-slate-400 mt-4">Meminta akses kamera...</p>';
-        html += '</div>';
-
-        Utils.openModal(html);
-        lucide.createIcons();
-
-        var self = this;
-        navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: false
-        }).then(function(stream) {
-            self._qrStream = stream;
-            var video = document.getElementById('qr-camera');
-            if (!video) { self._stopQrScanner(); return; }
-            video.srcObject = stream;
-            video.setAttribute('playsinline', 'true');
-            video.play().then(function() {
-                self._scanQrFrame();
-            }).catch(function(err) {
-                Utils.toast('Kamera tidak dapat dijalankan: ' + err.message, 'error');
-            });
-        }).catch(function(err) {
-            var status = document.getElementById('qr-scan-status');
-            if (status) status.textContent = 'Kamera tidak dapat diakses: ' + err.message;
-            Utils.toast('Akses kamera ditolak/tidak tersedia.', 'error');
-        });
-    },
-
-    _scanQrFrame: function() {
-        var self = this;
-        var video = document.getElementById('qr-camera');
-        var canvas = document.getElementById('qr-canvas');
-        if (!video || !canvas || !self._qrStream) return;
-
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            var width = video.videoWidth;
-            var height = video.videoHeight;
-            if (width && height) {
-                canvas.width = width;
-                canvas.height = height;
-                var ctx = canvas.getContext('2d', { willReadFrequently: true });
-                ctx.drawImage(video, 0, 0, width, height);
-                var image = ctx.getImageData(0, 0, width, height);
-                var code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' });
-                if (code && code.data) {
-                    self._handleQrResult(code.data);
-                    return;
-                }
-            }
-        }
-        self._qrFrame = requestAnimationFrame(function() { self._scanQrFrame(); });
-    },
-
-    _stopQrScanner: function() {
-        if (this._qrFrame) {
-            cancelAnimationFrame(this._qrFrame);
-            this._qrFrame = null;
-        }
-        if (this._qrStream) {
-            this._qrStream.getTracks().forEach(function(track) { track.stop(); });
-            this._qrStream = null;
-        }
-        var video = document.getElementById('qr-camera');
-        if (video) video.srcObject = null;
-    },
-
-    _handleQrResult: function(payload) {
-        this._stopQrScanner();
-
-        if (typeof payload !== 'string' || payload.indexOf('AULIA-EMPLOYEE|') !== 0) {
-            Utils.toast('QR bukan QR absensi karyawan Aulia.', 'error');
-            setTimeout(function(){ if (document.getElementById('global-modal')) AppManajemenAbsensi.openQrScanner(); }, 700);
-            return;
-        }
-
-        var karyawanId = payload.substring('AULIA-EMPLOYEE|'.length).trim();
-        if (!karyawanId) {
-            Utils.toast('QR tidak memiliki ID karyawan.', 'error');
-            return;
-        }
-
-        var self = this;
-        db.collection('karyawan').doc(karyawanId).get().then(function(doc) {
-            if (!doc.exists) {
-                Utils.toast('Karyawan pada QR tidak ditemukan.', 'error');
-                return;
-            }
-
-            var k = doc.data();
-            if (k.status === 'nonaktif') {
-                Utils.toast('Karyawan ini berstatus nonaktif.', 'warning');
-                return;
-            }
-
-            var duplicate = self.data.some(function(a) {
-                var sameDate = (a.tanggal || a.tgl) === self.todayStr;
-                var sameKaryawan = (a.karyawanId === karyawanId) ||
-                    (k.userId && a.userId === k.userId) ||
-                    (a.userId === karyawanId);
-                return sameDate && sameKaryawan;
-            });
-
-            if (duplicate) {
-                Utils.toast((k.nama || 'Karyawan') + ' sudah tercatat hadir hari ini.', 'warning');
-                return;
-            }
-
-            var current = firebase.auth().currentUser;
-            db.collection('absensi').add({
-                tanggal: self.todayStr,
-                karyawanId: karyawanId,
-                userId: k.userId || null,
-                namaKaryawan: k.nama || '-',
-                departemen: k.departemen || null,
-                checkIn: firebase.firestore.FieldValue.serverTimestamp(),
-                checkOut: null,
-                metode: 'qr-admin',
-                inputOleh: window.currentUserName || 'Admin',
-                inputOlehUid: current ? current.uid : null,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            }).then(function() {
-                Utils.toast('Absensi ' + (k.nama || 'karyawan') + ' berhasil dicatat.', 'success');
-                self.init();
-            }).catch(function(err) {
-                Utils.toast('Gagal menyimpan absensi: ' + err.message, 'error');
-            });
-        }).catch(function(err) {
-            Utils.toast('Gagal membaca data karyawan: ' + err.message, 'error');
-        });
-    },
-
-    // ===== LOGIC ABSENSI DIRI (STAFF) =====
-    renderMyAbsensi: function() {
-        var cu = firebase.auth().currentUser;
-        if (!cu) { /* FIX: hindari null deref bila sesi belum siap */ return; }
-        var myUid = cu.uid;
-        var myAbsen = this.data.find(function(d) { return d.userId === myUid; });
-        
-        var btnContainer = document.getElementById('my-absensi-btn');
-        var statusEl = document.getElementById('my-status');
-        if(!btnContainer || !statusEl) return;
-
-        if (!myAbsen) {
-            // Belum absen sama sekali
-            statusEl.innerHTML = 'Status: <span class="text-red-500 font-semibold">Belum Check-In</span>';
-            btnContainer.innerHTML = '<button onclick="AppManajemenAbsensi.selfCheckIn()" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2.5 rounded-lg text-sm flex items-center gap-2"><i data-lucide="log-in" class="w-4 h-4"></i> Check-In</button>';
-        } else if (myAbsen.checkIn && !myAbsen.checkOut) {
-            // Sudah check-in, belum check-out
-            var jamMasuk = myAbsen.checkIn.toDate().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-            statusEl.innerHTML = 'Status: Masuk pukul <span class="text-green-600 font-semibold">' + jamMasuk + '</span>';
-            btnContainer.innerHTML = '<button onclick="AppManajemenAbsensi.selfCheckOut(\'' + myAbsen.id + '\')" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2.5 rounded-lg text-sm flex items-center gap-2"><i data-lucide="log-out" class="w-4 h-4"></i> Check-Out</button>';
+    init: function(){
+        var self=this, range=this.monthRange();
+        if(this.isPrivileged()){
+            Promise.all([db.collection('karyawan').where('status','==','aktif').get(),db.collection('absensi').where('tanggal','>=',range.start).where('tanggal','<=',range.end).get()]).then(function(rs){ self.karyawanList=[]; rs[0].forEach(function(doc){var d=doc.data();d.id=doc.id;self.karyawanList.push(d);}); self.data=[]; rs[1].forEach(function(doc){var d=doc.data();d.id=doc.id;self.data.push(d);}); self.renderPrivileged(); }).catch(function(e){Utils.toast('Gagal memuat absensi: '+e.message,'error');});
         } else {
-            // Sudah check-out
-            var jamMasuk2 = myAbsen.checkIn.toDate().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-            var jamPulang = myAbsen.checkOut.toDate().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-            statusEl.innerHTML = 'Status: Selesai (Masuk ' + jamMasuk2 + ' - Pulang ' + jamPulang + ')';
-            btnContainer.innerHTML = '<span class="text-xs text-slate-400 italic">Absensi hari ini selesai.</span>';
+            var cu=firebase.auth().currentUser; if(!cu){Utils.toast('Sesi pengguna belum siap.','error');return;}
+            db.collection('absensi').where('userId','==',cu.uid).get().then(function(s){ self.data=[]; s.forEach(function(doc){var d=doc.data();d.id=doc.id;if((d.tanggal||'')>=range.start&&(d.tanggal||'')<=range.end)self.data.push(d);}); self.renderPersonal(); }).catch(function(e){Utils.toast('Gagal memuat absensi: '+e.message,'error');});
         }
-        lucide.createIcons();
     },
-
-    selfCheckIn: function() {
-        var myUid = firebase.auth().currentUser.uid;
-        var myName = window.currentUserName || 'Karyawan';
-        
-        db.collection('absensi').add({
-            tanggal: this.todayStr,
-            userId: myUid,
-            namaKaryawan: myName,
-            checkIn: firebase.firestore.FieldValue.serverTimestamp(),
-            checkOut: null,
-            inputOleh: 'Self-Check',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-            Utils.toast('Berhasil Check-In!', 'success');
-            AppManajemenAbsensi.init();
-        }).catch(err => Utils.toast('Gagal: ' + err.message, 'error'));
+    changeMonth: function(v){ if(!/^\d{4}-\d{2}$/.test(v))return; this.selectedMonth=v; this.init(); },
+    renderPersonal: function(){
+        var c=document.getElementById('absensi-list'); if(!c)return; var range=this.monthRange(),map={}; this.data.forEach(function(a){map[a.tanggal]=a;}); var p=range.start.split('-').map(Number),y=p[0],m=p[1]-1;
+        var html='<div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden"><div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700"><div class="font-semibold text-gray-800 dark:text-white">Absensi Saya — '+this.monthLabel()+'</div><div class="text-xs text-slate-400 mt-1">Hanya menampilkan status hadir/tidak ada absensi.</div></div><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">';
+        for(var d=1;d<=range.days;d++){var ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'),hadir=!!map[ds]; html+='<div class="flex items-center justify-between rounded-lg border '+(hadir?'border-green-200 bg-green-50 dark:bg-green-900/20':'border-slate-200 bg-slate-50 dark:bg-slate-900')+' px-4 py-3"><div class="text-sm font-medium text-gray-800 dark:text-white">'+new Date(y,m,d).toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short'})+'</div>'+(hadir?'<span class="text-xs font-semibold text-green-600">Hadir</span>':'<span class="text-xs font-semibold text-slate-500">Tidak ada absensi</span>')+'</div>';}
+        html+='</div></div>'; c.innerHTML=html;
     },
-
-    selfCheckOut: function(id) {
-        db.collection('absensi').doc(id).update({
-            checkOut: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-            Utils.toast('Berhasil Check-Out. Hati-hati di jalan!', 'success');
-            AppManajemenAbsensi.init();
-        }).catch(err => Utils.toast('Gagal: ' + err.message, 'error'));
+    renderPrivileged: function(){
+        var c=document.getElementById('absensi-list');if(!c)return; var range=this.monthRange(),map={}; this.data.forEach(function(a){map[(a.karyawanId||a.userId||'')+'|'+a.tanggal]=a;}); var p=range.start.split('-').map(Number),y=p[0],m=p[1]-1;
+        var html='<div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden"><div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700"><div class="font-semibold text-gray-800 dark:text-white">Rekap Absensi — '+this.monthLabel()+'</div><div class="text-xs text-slate-400 mt-1">Gunakan “Koreksi Absen” untuk tanggal yang terlupa.</div></div><div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50 dark:bg-slate-900 text-xs text-slate-500 uppercase"><th class="px-4 py-3 text-left">Karyawan</th><th class="px-4 py-3 text-left">Departemen</th><th class="px-4 py-3 text-center">Hadir</th><th class="px-4 py-3 text-center">Tidak Ada Absensi</th></tr></thead><tbody>';
+        var self=this; this.karyawanList.sort(function(a,b){return (a.nama||'').localeCompare(b.nama||'');}).forEach(function(k){var id=k.id,uid=k.userId||k.id,hadir=0;for(var d=1;d<=range.days;d++){var ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');if(map[id+'|'+ds]||map[uid+'|'+ds])hadir++;}html+='<tr class="border-t border-slate-100 dark:border-slate-700"><td class="px-4 py-3 font-medium text-gray-800 dark:text-white">'+self.escape(k.nama||'-')+'</td><td class="px-4 py-3">'+self.escape(k.departemen||'-')+'</td><td class="px-4 py-3 text-center"><span class="text-green-600 font-semibold">'+hadir+'</span></td><td class="px-4 py-3 text-center"><span class="text-slate-500">'+(range.days-hadir)+'</span></td></tr>';});
+        if(!this.karyawanList.length)html+='<tr><td colspan="4" class="py-8 text-center text-slate-400">Tidak ada karyawan aktif.</td></tr>'; html+='</tbody></table></div></div>';c.innerHTML=html;lucide.createIcons();
     },
-
-    // ===== TABEL REKAP (ADMIN & KEUANGAN) =====
-    renderList: function() {
-        var container = document.getElementById('absensi-list');
-        if (!container) return;
-
-        var role = window.currentRole || 'apotek';
-        var canManage = (role === 'keuangan' || role === 'psa');
-
-        var html = '<div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">';
-        html += '<table class="w-full text-sm">';
-        html += '<thead><tr class="bg-slate-50 dark:bg-slate-900 text-xs text-slate-500 uppercase tracking-wider">';
-        html += '<th class="px-4 py-3 text-left">Nama Karyawan</th>';
-        html += '<th class="px-4 py-3 text-center">Jam Masuk</th>';
-        html += '<th class="px-4 py-3 text-center">Jam Pulang</th>';
-        html += '<th class="px-4 py-3 text-center">Status</th>';
-        if (canManage) html += '<th class="px-4 py-3 text-right">Aksi</th>';
-        html += '</tr></thead><tbody>';
-        
-        // Gabungkan list karyawan dengan data absensi
-        var karyawanHadirIds = this.data.map(d => d.userId);
-        
-        // Tampilkan yang sudah absen
-        if (this.data.length === 0 && this.karyawanList.length === 0) {
-            html += '<tr><td colspan="4" class="text-center py-6 text-slate-400">Tidak ada data.</td></tr>';
-        } else {
-            // Tampilkan karyawan yang SUDAH absen
-            this.data.forEach(function(a) {
-                var jamMasuk = a.checkIn ? a.checkIn.toDate().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
-                var jamPulang = a.checkOut ? a.checkOut.toDate().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
-                var statusBadge = a.checkOut ? '<span class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full">Selesai</span>' : '<span class="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">Bertugas</span>';
-                
-                html += '<tr class="border-t border-slate-100 dark:border-slate-700">';
-                html += '<td class="px-4 py-3 font-medium text-gray-800 dark:text-white">' + Utils.escapeHtml(a.namaKaryawan) + '</td>';
-                html += '<td class="px-4 py-3 text-center text-slate-600 dark:text-slate-300">' + jamMasuk + '</td>';
-                html += '<td class="px-4 py-3 text-center text-slate-600 dark:text-slate-300">' + jamPulang + '</td>';
-                html += '<td class="px-4 py-3 text-center">' + statusBadge + '</td>';
-                if (canManage) {
-                    html += '<td class="px-4 py-3 text-right"><button onclick="AppManajemenAbsensi.hapusAbsen(\'' + a.id + '\')" class="text-xs text-red-500 hover:underline">Hapus</button></td>';
-                }
-                html += '</tr>';
-            });
- 
-            // FIX: implementasikan baris 'Belum Absen' utk karyawan aktif yg belum check-in.
-            if (canManage) {
-                this.karyawanList.forEach(function(k) {
-                    var hadir = (k.userId && karyawanHadirIds.indexOf(k.userId) !== -1) ||
-                                (k.id && karyawanHadirIds.indexOf(k.id) !== -1);
-                    if (!hadir) {
-                        html += '<tr class="border-t border-slate-100 dark:border-slate-700 text-slate-400">';
-                        html += '<td class="px-4 py-3 font-medium">' + Utils.escapeHtml(k.nama || '-') + '</td>';
-                        html += '<td class="px-4 py-3 text-center">-</td>';
-                        html += '<td class="px-4 py-3 text-center">-</td>';
-                        html += '<td class="px-4 py-3 text-center"><span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded-full">Belum Absen</span></td>';
-                        html += '<td class="px-4 py-3 text-right"></td>';
-                        html += '</tr>';
-                    }
-                });
-            }
-        }
-
-        html += '</tbody></table></div>';
-        container.innerHTML = html;
-        lucide.createIcons();
+    _qrStream:null,_qrFrame:null,
+    openQrScanner:function(){
+        if(!this.canScan()){Utils.toast('Anda tidak memiliki akses scan QR absensi.','error');return;} if(typeof jsQR==='undefined'){Utils.toast('Library scanner QR belum berhasil dimuat.','error');return;} if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){Utils.toast('Kamera tidak tersedia.','error');return;} this._stopQrScanner();
+        var html='<div class="p-5"><div class="flex items-center justify-between mb-4"><div><h3 class="text-lg font-bold text-gray-800 dark:text-white">Scan QR Absensi</h3><p class="text-xs text-slate-400 mt-1">Scan hanya untuk jam datang.</p></div><button onclick="AppManajemenAbsensi._stopQrScanner();Utils.closeModal()" class="p-1.5"><i data-lucide="x" class="w-5 h-5"></i></button></div><div class="relative overflow-hidden rounded-2xl bg-black aspect-square max-w-md mx-auto"><video id="qr-camera" autoplay playsinline muted class="w-full h-full object-cover"></video><div class="absolute inset-8 border-2 border-white/80 rounded-xl pointer-events-none"></div><canvas id="qr-canvas" class="hidden"></canvas></div><p id="qr-scan-status" class="text-center text-sm text-slate-500 mt-4">Meminta akses kamera...</p></div>';
+        Utils.openModal(html);lucide.createIcons();var self=this; navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}).then(function(stream){self._qrStream=stream;var v=document.getElementById('qr-camera');if(!v){self._stopQrScanner();return;}v.srcObject=stream;v.play().then(function(){self._scanQrFrame();});}).catch(function(e){var s=document.getElementById('qr-scan-status');if(s)s.textContent='Kamera tidak dapat diakses: '+e.message;});
     },
-
-    // ===== INPUT MANUAL OLEH ADMIN =====
-    openManualForm: function() {
-        var role = window.currentRole || 'apotek';
-        if (role !== 'psa' && role !== 'keuangan') {
-            Utils.toast('Anda tidak memiliki akses untuk input manual absen.', 'error');
-            return;
-        }
-        var html = '<div class="p-6">';
-        html += '<div class="flex items-center justify-between mb-5"><h3 class="text-lg font-semibold text-gray-800 dark:text-white">Input Manual Absen</h3><button onclick="Utils.closeModal()" class="p-1.5 hover:bg-slate-100 rounded-lg"><i data-lucide="x" class="w-5 h-5 text-slate-400"></i></button></div>';
-        html += '<form id="form-manual" class="space-y-4">';
-        
-        html += '<div><label class="block text-sm font-medium text-slate-700 mb-1">Pilih Karyawan *</label><select id="man-kary" required class="w-full px-3 py-2 border border-slate-300 dark:bg-slate-700 dark:text-white rounded-lg text-sm"><option value="">-- Pilih --</option>';
-        this.karyawanList.forEach(k => {
-            html += '<option value="' + k.id + '" data-nama="' + Utils.escapeHtml(k.nama) + '">' + Utils.escapeHtml(k.nama) + ' (' + Utils.escapeHtml(k.departemen || '-') + ')</option>';
-        });
-        html += '</select></div>';
-
-        html += '<div class="grid grid-cols-2 gap-4">';
-        html += '<div><label class="block text-sm font-medium text-slate-700 mb-1">Jam Masuk</label><input type="time" id="man-masuk" class="w-full px-3 py-2 border border-slate-300 dark:bg-slate-700 dark:text-white rounded-lg text-sm"></div>';
-        html += '<div><label class="block text-sm font-medium text-slate-700 mb-1">Jam Pulang</label><input type="time" id="man-pulang" class="w-full px-3 py-2 border border-slate-300 dark:bg-slate-700 dark:text-white rounded-lg text-sm"></div>';
-        html += '</div>';
-
-        html += '<div class="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-700">';
-        html += '<button type="button" onclick="Utils.closeModal()" class="px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>';
-        html += '<button type="submit" class="px-6 py-2.5 text-sm bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg">Simpan</button>';
-        html += '</div></form></div>';
-
-        Utils.openModal(html);
-        setTimeout(() => {
-            document.getElementById('form-manual').addEventListener('submit', function(e) {
-                e.preventDefault();
-                AppManajemenAbsensi.simpanManual();
-            });
-        }, 100);
+    _scanQrFrame:function(){var self=this,v=document.getElementById('qr-camera'),c=document.getElementById('qr-canvas');if(!v||!c||!self._qrStream)return;if(v.readyState===v.HAVE_ENOUGH_DATA){var w=v.videoWidth,h=v.videoHeight;if(w&&h){c.width=w;c.height=h;var x=c.getContext('2d',{willReadFrequently:true});x.drawImage(v,0,0,w,h);var code=jsQR(x.getImageData(0,0,w,h).data,w,h,{inversionAttempts:'dontInvert'});if(code&&code.data){self._handleQrResult(code.data);return;}}}self._qrFrame=requestAnimationFrame(function(){self._scanQrFrame();});},
+    _stopQrScanner:function(){if(this._qrFrame){cancelAnimationFrame(this._qrFrame);this._qrFrame=null;}if(this._qrStream){this._qrStream.getTracks().forEach(function(t){t.stop();});this._qrStream=null;}var v=document.getElementById('qr-camera');if(v)v.srcObject=null;},
+    _handleQrResult:function(payload){var self=this;this._stopQrScanner();if(typeof payload!=='string'||payload.indexOf('AULIA-EMPLOYEE|')!==0){Utils.toast('QR bukan QR absensi karyawan Aulia.','error');return;}var id=payload.substring('AULIA-EMPLOYEE|'.length).trim();if(!id){Utils.toast('QR tidak memiliki ID karyawan.','error');return;}db.collection('karyawan').doc(id).get().then(function(doc){if(!doc.exists){Utils.toast('Karyawan tidak ditemukan.','error');return;}var k=doc.data();if(k.status==='nonaktif'){Utils.toast('Karyawan nonaktif.','warning');return;}var today=self.todayStr();return db.collection('absensi').where('tanggal','==',today).where('karyawanId','==',id).get().then(function(s){if(!s.empty){Utils.toast((k.nama||'Karyawan')+' sudah hadir hari ini.','warning');return;}var u=firebase.auth().currentUser;return db.collection('absensi').add({tanggal:today,karyawanId:id,userId:k.userId||null,namaKaryawan:k.nama||'-',departemen:k.departemen||null,checkIn:firebase.firestore.FieldValue.serverTimestamp(),checkOut:null,metode:'qr-admin',inputOleh:window.currentUserName||'Admin',inputOlehUid:u?u.uid:null,createdAt:firebase.firestore.FieldValue.serverTimestamp()});}).then(function(){Utils.closeModal();Utils.toast('Absensi '+(k.nama||'karyawan')+' berhasil dicatat.','success');self.init();});}).catch(function(e){Utils.toast('Gagal menyimpan absensi: '+e.message,'error');});
     },
-
-    simpanManual: function() {
-        var role = window.currentRole || 'apotek';
-        if (role !== 'psa' && role !== 'keuangan') {
-            Utils.toast('Anda tidak memiliki akses untuk menyimpan absen manual.', 'error');
-            return;
-        }
-        // PERBAIKAN AUDIT (temuan #10): penjaga klik-ganda. Absensi kembar
-        // langsung menaikkan hitungan "hari kerja" di payroll, karena payroll
-        // memakai filter(...).length tanpa deduplikasi apa pun.
-        var release = SubmitGuard.lock('absensi:simpanManual',
-                                       '#form-manual button[type="submit"]');
-        if (!release) return;
-
-        var select = document.getElementById('man-kary');
-        var karyId = select.value;
-        var namaKary = select.options[select.selectedIndex].getAttribute('data-nama');
-        var jamMasuk = document.getElementById('man-masuk').value;
-        var jamPulang = document.getElementById('man-pulang').value;
-
-        if (!karyId) { Utils.toast('Pilih karyawan', 'error'); release(); return; }
-
-        // Konversi jam string ke Firestore Timestamp
-        var checkInTs = jamMasuk ? firebase.firestore.Timestamp.fromDate(new Date(this.todayStr + 'T' + jamMasuk + ':00')) : null;
-        var checkOutTs = jamPulang ? firebase.firestore.Timestamp.fromDate(new Date(this.todayStr + 'T' + jamPulang + ':00')) : null;
-
-        db.collection('absensi').add({
-            tanggal: this.todayStr,
-            userId: karyId, // Diisi ID karyawan (bisa diupdate jika karyawan punya akun login)
-            namaKaryawan: namaKary,
-            checkIn: checkInTs,
-            checkOut: checkOutTs,
-            inputOleh: window.currentUserName || 'Admin',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-            Utils.toast('Absen manual tersimpan!', 'success');
-            Utils.closeModal();
-            release();
-            AppManajemenAbsensi.init();
-        }).catch(err => { Utils.toast('Gagal: ' + err.message, 'error'); release(); });
+    openCorrectionForm:function(){
+        if(!this.canEdit()){Utils.toast('Hanya PSA dan Keuangan yang dapat mengoreksi absensi.','error');return;} var html='<div class="p-6"><div class="flex items-center justify-between mb-5"><h3 class="text-lg font-semibold text-gray-800 dark:text-white">Koreksi Absensi</h3><button onclick="Utils.closeModal()"><i data-lucide="x" class="w-5 h-5"></i></button></div><form id="form-koreksi" class="space-y-4"><div><label class="block text-sm font-medium mb-1">Karyawan *</label><select id="kor-kary" required class="w-full px-3 py-2 border rounded-lg"><option value="">-- Pilih --</option>';
+        this.karyawanList.forEach(function(k){html+='<option value="'+k.id+'">'+Utils.escapeHtml(k.nama||'-')+' ('+Utils.escapeHtml(k.departemen||'-')+')</option>';}); html+='</select></div><div><label class="block text-sm font-medium mb-1">Tanggal *</label><input id="kor-tanggal" type="date" required min="'+this.monthRange().start+'" max="'+this.monthRange().end+'" value="'+this.todayStr()+'" class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-medium mb-1">Jam datang *</label><input id="kor-jam" type="time" required class="w-full px-3 py-2 border rounded-lg"></div><div class="text-xs text-slate-500">Koreksi hanya mencatat jam datang. Tidak ada jam pulang.</div><div class="flex justify-end gap-2 pt-3"><button type="button" onclick="Utils.closeModal()" class="px-4 py-2">Batal</button><button type="submit" class="px-5 py-2 bg-primary-600 text-white rounded-lg font-semibold">Simpan Koreksi</button></div></form></div>';
+        Utils.openModal(html);lucide.createIcons();var self=this;document.getElementById('form-koreksi').addEventListener('submit',function(e){e.preventDefault();self.saveCorrection();});
     },
-
-    hapusAbsen: function(id) {
-        var role = window.currentRole || 'apotek';
-        if (role !== 'keuangan' && role !== 'psa') {
-            Utils.toast('Anda tidak memiliki akses untuk menghapus data absensi.', 'error');
-            return;
-        }
-        if (!confirm('Hapus data absensi ini?')) return;
-        db.collection('absensi').doc(id).delete().then(() => {
-            Utils.toast('Data dihapus.', 'info');
-            AppManajemenAbsensi.init();
-        }).catch(err => Utils.toast('Gagal: ' + err.message, 'error'));
+    saveCorrection:function(){
+        if(!this.canEdit())return; var id=document.getElementById('kor-kary').value,date=document.getElementById('kor-tanggal').value,jam=document.getElementById('kor-jam').value;if(!id||!date||!jam){Utils.toast('Lengkapi data koreksi.','error');return;} var k=this.karyawanList.find(function(x){return x.id===id;})||{},self=this,ts=firebase.firestore.Timestamp.fromDate(new Date(date+'T'+jam+':00')),u=firebase.auth().currentUser;
+        db.collection('absensi').where('tanggal','==',date).where('karyawanId','==',id).get().then(function(s){var payload={tanggal:date,karyawanId:id,userId:k.userId||null,namaKaryawan:k.nama||'-',departemen:k.departemen||null,checkIn:ts,checkOut:null,metode:'manual-koreksi',dikoreksiOleh:window.currentUserName||'Keuangan',dikoreksiOlehUid:u?u.uid:null,dikoreksiAt:firebase.firestore.FieldValue.serverTimestamp()};if(!s.empty)return s.docs[0].ref.update(payload);payload.createdAt=firebase.firestore.FieldValue.serverTimestamp();return db.collection('absensi').add(payload);}).then(function(){Utils.closeModal();Utils.toast('Absensi berhasil dikoreksi.','success');self.init();}).catch(function(e){Utils.toast('Gagal menyimpan koreksi: '+e.message,'error');});
     }
 };

@@ -11,250 +11,161 @@
   animation: spinner-border .75s linear infinite;
 }
 
-/* Custom sizes for spinner */
-.spinner.w-3.h-3 {
-  width: 0.75rem;
-  height: 0.75rem;
-  border-width: 0.1em;
-}
+.spinner.w-3.h-3 { width: 0.75rem; height: 0.75rem; border-width: 0.1em; }
+.spinner.w-3\\.5.h-3\\.5 { width: 0.875rem; height: 0.875rem; border-width: 0.125em; }
+.spinner.w-4.h-4 { width: 1rem; height: 1rem; border-width: 0.125em; }
 
-.spinner.w-3\.5.h-3\.5 {
-  width: 0.875rem;
-  height: 0.875rem;
-  border-width: 0.125em;
-}
+@keyframes spinner-border { to { transform: rotate(360deg); } }
+@-webkit-keyframes spinner-border { to { -webkit-transform: rotate(360deg); } }
 
-.spinner.w-4.h-4 {
-  width: 1rem;
-  height: 1rem;
-  border-width: 0.125em;
-}
-
-@keyframes spinner-border {
-  to { transform: rotate(360deg); }
-}
-
-@-webkit-keyframes spinner-border {
-  to { -webkit-transform: rotate(360deg); }
-}
-
-/* Ensure smooth transitions */
 .transition-all {
   transition-property: all;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }
 
-/* Smooth theme toggle transition for body and container elements */
 body {
   transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-header,
-aside,
-main,
-section,
-div,
-button,
-input,
-select,
-textarea,
-table,
-tr,
-th,
-td,
-a,
-p,
-span,
-h1, h2, h3, h4, h5, h6 {
+header, aside, main, section, div, button, input, select, textarea, table, tr, th, td, a, p, span, h1, h2, h3, h4, h5, h6 {
   transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* SIDEBAR NAVIGATION FIX */
+#sidebar-menu .nav-btn,
+#mobile-sidebar-menu .nav-btn {
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  outline: none !important;
+  transform: none !important;
+  transition: none !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#sidebar-menu .nav-btn > *,
+#mobile-sidebar-menu .nav-btn > * {
+  pointer-events: none;
+}
+
+#sidebar-menu .nav-btn:hover,
+#mobile-sidebar-menu .nav-btn:hover {
+  background-color: #f8fafc !important;
+  color: #0284c7 !important;
+  box-shadow: none !important;
+}
+
+#sidebar-menu .nav-btn:active,
+#mobile-sidebar-menu .nav-btn:active {
+  background-color: #f1f5f9 !important;
+  color: #0369a1 !important;
+  transform: none !important;
+}
+
+#sidebar-menu .nav-btn:focus,
+#sidebar-menu .nav-btn:focus-visible,
+#mobile-sidebar-menu .nav-btn:focus,
+#mobile-sidebar-menu .nav-btn:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.dark #sidebar-menu .nav-btn:hover,
+.dark #mobile-sidebar-menu .nav-btn:hover {
+  background-color: #334155 !important;
+  color: #38bdf8 !important;
+}
+
+.dark #sidebar-menu .nav-btn:active,
+.dark #mobile-sidebar-menu .nav-btn:active {
+  background-color: #475569 !important;
+  color: #7dd3fc !important;
+}
+
+#sidebar-menu .nav-btn.bg-primary-50,
+#mobile-sidebar-menu .nav-btn.bg-primary-50 {
+  background-color: #f0f9ff !important;
+  color: #0284c7 !important;
+}
+
+.dark #sidebar-menu .nav-btn.dark\\:bg-slate-700,
+.dark #mobile-sidebar-menu .nav-btn.dark\\:bg-slate-700 {
+  background-color: #334155 !important;
+  color: #38bdf8 !important;
+}
+
+/* Prevent generic global transitions from affecting sidebar navigation. */
+#sidebar-menu .nav-btn,
+#sidebar-menu .nav-btn *,
+#mobile-sidebar-menu .nav-btn,
+#mobile-sidebar-menu .nav-btn * {
+  transition: none !important;
+  animation: none !important;
+}
+
 /* Scrollbar styling for a cleaner look */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.dark ::-webkit-scrollbar-thumb { background: #475569; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+#landing-hero img, .hero-banner-img { object-fit: cover !important; }
+#landing-clinic-services img, .services-section-img { object-fit: cover !important; }
+#landing-gallery img, #doctor-schedule-list img { object-fit: cover !important; }
 
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: #475569;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
-}
-
-/* Ensure Hero Banner and Services (Layanan) images are always proportional with object-fit: cover */
-#landing-hero img,
-.hero-banner-img {
-  object-fit: cover !important;
-}
-
-#landing-clinic-services img,
-.services-section-img {
-  object-fit: cover !important;
-}
-
-/* Gallery and Doctor profile pictures object-fit cover */
-#landing-gallery img,
-#doctor-schedule-list img {
-  object-fit: cover !important;
-}
-
-/* Scroll Reveal Animation with clean bezier transition */
 .scroll-reveal {
   opacity: 0;
   transform: translateY(24px);
   transition: opacity 0.8s cubic-bezier(0.21, 0.6, 0.35, 1), transform 0.8s cubic-bezier(0.21, 0.6, 0.35, 1);
   will-change: opacity, transform;
 }
+.scroll-reveal.reveal-visible { opacity: 1; transform: translateY(0); }
 
-.scroll-reveal.reveal-visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* Animation for Doctor Profile Cards and Schedule Cards */
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
 }
+.animate-fade-in-up { animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
-.animate-fade-in-up {
-  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
+.doctor-profile-card { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+.doctor-profile-card:hover { transform: translateY(-6px) scale(1.015); box-shadow: 0 20px 25px -5px rgba(16, 185, 129, 0.12), 0 10px 10px -5px rgba(16, 185, 129, 0.05); border-color: rgba(16, 185, 129, 0.3); }
+.doctor-schedule-card { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.doctor-schedule-card:hover { transform: translateY(-3px) scale(1.01); box-shadow: 0 12px 20px -8px rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.3); }
 
-/* Hover effects for a professional feel */
-.doctor-profile-card {
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.doctor-profile-card:hover {
-  transform: translateY(-6px) scale(1.015);
-  box-shadow: 0 20px 25px -5px rgba(16, 185, 129, 0.12), 0 10px 10px -5px rgba(16, 185, 129, 0.05);
-  border-color: rgba(16, 185, 129, 0.3);
-}
+html, body { max-width: 100vw; overflow-x: hidden; box-sizing: border-box; }
+*, ::before, ::after { box-sizing: border-box; }
+img, svg, video, canvas, iframe { max-width: 100%; height: auto; }
+input, select, textarea, button { max-width: 100%; }
+.table-responsive, .overflow-x-auto { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-.doctor-schedule-card {
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.doctor-schedule-card:hover {
-  transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 12px 20px -8px rgba(16, 185, 129, 0.18);
-  border-color: rgba(16, 185, 129, 0.3);
-}
-
-/* ============================================================
-   RESPONSIVE PRECISION RULES (HP, TABLET, DESKTOP WEB)
-   Jaringan pengaman agar tidak ada elemen, tabel, atau modal yang terpotong.
-   ============================================================ */
-
-/* Global box-sizing and media clipping protection */
-html, body {
-  max-width: 100vw;
-  overflow-x: hidden;
-  box-sizing: border-box;
-}
-
-*, ::before, ::after {
-  box-sizing: border-box;
-}
-
-/* Flexible media scaling */
-img, svg, video, canvas, iframe {
-  max-width: 100%;
-  height: auto;
-}
-
-/* Form element overflow prevention */
-input, select, textarea, button {
-  max-width: 100%;
-}
-
-/* Precision Table Wrapping */
-.table-responsive,
-.overflow-x-auto {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Mobile & Tablet Table Cell Precision */
 @media (max-width: 768px) {
-  table th, table td {
-    padding-left: 0.5rem !important;
-    padding-right: 0.5rem !important;
-    font-size: 0.8125rem !important;
-  }
+  table th, table td { padding-left: 0.5rem !important; padding-right: 0.5rem !important; font-size: 0.8125rem !important; }
 }
 
-/* Modal Precision Overlay */
-#global-modal {
-  padding: 1rem;
-  box-sizing: border-box;
+#global-modal { padding: 1rem; box-sizing: border-box; }
+#global-modal > div { max-height: 88vh !important; max-width: calc(100vw - 2rem) !important; margin: auto !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
+#app-toast { max-width: calc(100vw - 2rem) !important; word-break: break-word; }
+#app-content { width: 100%; max-width: 100vw; margin-left: auto; margin-right: auto; box-sizing: border-box; }
+#app-content > div { width: 100%; max-width: 1280px; margin-left: auto; margin-right: auto; }
+.cyber-hud-bar { width: 100%; box-sizing: border-box; }
+@media (max-width: 640px) { .cyber-hud-bar { justify-content: center !important; text-align: center; gap: 0.5rem; } }
+
+/* FINAL SIDEBAR STABILITY: no visual flash and no delayed focus state. */
+#sidebar-menu .nav-btn,
+#mobile-sidebar-menu .nav-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-touch-callout: none;
+  will-change: auto;
 }
-
-#global-modal > div {
-  max-height: 88vh !important;
-  max-width: calc(100vw - 2rem) !important;
-  margin: auto !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch !important;
+#sidebar-menu .nav-btn::before,
+#sidebar-menu .nav-btn::after,
+#mobile-sidebar-menu .nav-btn::before,
+#mobile-sidebar-menu .nav-btn::after {
+  transition: none !important;
+  animation: none !important;
 }
-
-/* Toast Notification Precision */
-#app-toast {
-  max-width: calc(100vw - 2rem) !important;
-  word-break: break-word;
-}
-
-/* Mobile Content Container Centering & Precision */
-#app-content {
-  width: 100%;
-  max-width: 100vw;
-  margin-left: auto;
-  margin-right: auto;
-  box-sizing: border-box;
-}
-
-#app-content > div {
-  width: 100%;
-  max-width: 1280px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Cyber HUD Bar Centering on Mobile HP */
-.cyber-hud-bar {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-@media (max-width: 640px) {
-  .cyber-hud-bar {
-    justify-content: center !important;
-    text-align: center;
-    gap: 0.5rem;
-  }
-}
-
-

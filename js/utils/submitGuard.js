@@ -1,44 +1,7 @@
 /**
  * js/utils/submitGuard.js
  * ============================================================
- * PERBAIKAN AUDIT (Juli 2026) — TEMUAN #10: klik ganda pada form keuangan.
- *
- * Latar belakang:
- * Pola penjaga klik-ganda (`_isSaving` + `btn.disabled` + `_resetGuard()`)
- * sudah ditulis dengan benar di lima modul — transaksi, retur, pembelian,
- * rekamMedis, antrian — tapi disalin manual satu per satu, sehingga delapan
- * modul lain (justru yang menyangkut uang: pengeluaran, pendapatan lain,
- * piutang, jurnal manual, absensi manual, master obat/pasien/karyawan)
- * tidak pernah kebagian. Akibatnya menekan Enter dua kali atau double-tap
- * di tablet menghasilkan DUA dokumen identik dengan ID berbeda.
- *
- * File ini menjadikan pola tersebut satu utilitas bersama, supaya modul
- * baru tinggal memakainya dan tidak perlu menyalin ulang logikanya.
- *
- * BATASAN YANG HARUS DIPAHAMI:
- * Penjaga ini hidup di MEMORI SATU TAB BROWSER. Ia mencegah satu orang
- * mengklik dua kali; ia TIDAK mencegah dua orang di dua perangkat menyimpan
- * hal yang sama secara bersamaan. Untuk itu diperlukan kunci di sisi server
- * (ID dokumen deterministik atau runTransaction) — lihat laporan audit
- * bagian Batch 2. Jangan perlakukan file ini sebagai pengganti hal tersebut.
- *
- * CARA PAKAI:
- *   simpan: function () {
- *       var release = SubmitGuard.lock('pengeluaran:simpan',
- *                                      '#form-pengeluaran button[type="submit"]');
- *       if (!release) return;              // klik ganda -> abaikan
- *
- *       if (tidakValid) { Utils.toast('...', 'error'); release(); return; }
- *
- *       db.collection('x').add(obj)
- *         .then(function () { ...; release(); })
- *         .catch(function (err) { Utils.toast('Gagal: ' + err.message, 'error'); release(); });
- *   }
- *
- * `release()` WAJIB dipanggil di SEMUA jalur keluar — termasuk jalur
- * validasi yang membatalkan lebih awal. Kalau terlewat, ada jaring pengaman
- * berupa auto-release setelah AUTO_RELEASE_MS supaya form tidak terkunci
- * selamanya (lebih baik berisiko dobel daripada kasir tidak bisa bekerja).
+ * Shared submit guard for finance/transaction forms.
  */
 window.SubmitGuard = {
     AUTO_RELEASE_MS: 30000,
@@ -81,5 +44,46 @@ window.SubmitGuard = {
     s.src = 'js/utils/etalaseHook.js';
     s.onload = function () { console.info('[Haypop Etalase] integration hook loaded'); };
     s.onerror = function () { console.warn('[Haypop Etalase] integration hook failed to load'); };
+    document.head.appendChild(s);
+})();
+
+// Disable the legacy second Etalase menu and prevent its renderSidebar patch.
+(function () {
+    var s = document.createElement('script');
+    s.src = 'js/utils/etalaseMenuGuard.js';
+    s.onload = function () { console.info('[Etalase] duplicate menu guard loaded'); };
+    s.onerror = function () { console.warn('[Etalase] duplicate menu guard failed to load'); };
+    document.head.appendChild(s);
+})();
+
+// Keep exactly one Etalase entry in each rendered sidebar as a safety net.
+(function () {
+    function normalizeEtalaseMenu() {
+        ['sidebar-menu', 'mobile-sidebar-menu'].forEach(function (id) {
+            var root = document.getElementById(id);
+            if (!root) return;
+            var matches = Array.prototype.slice.call(root.querySelectorAll('button')).filter(function (btn) {
+                var page = String(btn.getAttribute('data-page') || '').toLowerCase();
+                var text = String(btn.textContent || '').trim().toLowerCase();
+                return page === 'etalase' || text === 'etalase' || text === 'etalase haypop';
+            });
+            if (matches.length <= 1) return;
+            matches.slice(1).forEach(function (btn) {
+                var item = btn.closest('li') || btn.parentElement;
+                if (item) item.remove();
+            });
+        });
+    }
+    window.normalizeEtalaseMenu = normalizeEtalaseMenu;
+    setInterval(normalizeEtalaseMenu, 250);
+    setTimeout(normalizeEtalaseMenu, 0);
+})();
+
+// Sidebar navigation hardening is loaded globally because the sidebar is rendered dynamically.
+(function () {
+    var s = document.createElement('script');
+    s.src = 'js/utils/sidebarFix.js';
+    s.onload = function () { console.info('[Sidebar] single-click navigation guard loaded'); };
+    s.onerror = function () { console.warn('[Sidebar] navigation guard failed to load'); };
     document.head.appendChild(s);
 })();

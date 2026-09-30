@@ -31,87 +31,52 @@ window.AuditLog = {
 };
 
 // ============================================================
-// HAYPOP ETALASE — menu khusus role Keuangan
+// HAYPOP ETALASE — registrasi menu native khusus role Keuangan
 // ============================================================
-(function initHaypopEtalaseMenu() {
-    function isFinanceRole() {
-        if (String(window.currentRole || '').toLowerCase() === 'keuangan') return true;
+// Jangan memanipulasi DOM sidebar secara langsung. Aplikasi utama
+// membangun sidebar dari menuStructure + roleAccess. Kita tunggu kedua
+// struktur tersedia, lalu mendaftarkan item ke menuStructure.apotek dan
+// renderSidebar ulang dengan role yang sedang login.
+(function registerHaypopEtalaseNativeMenu() {
+    var registered = false;
+    var attempts = 0;
 
-        var roleEl = document.getElementById('user-role');
-        var roleText = roleEl ? String(roleEl.textContent || '').trim().toLowerCase() : '';
-        if (roleText === 'keuangan' || roleText.indexOf('keuangan') !== -1) return true;
+    function register() {
+        if (registered) return true;
+        if (typeof window.menuStructure === 'undefined' || typeof window.roleAccess === 'undefined') return false;
+        if (!Array.isArray(window.menuStructure.apotek)) return false;
 
-        return false;
-    }
+        var exists = window.menuStructure.apotek.some(function (item) {
+            return item && (item.id === 'etalase' || item.module === 'apotek/etalase');
+        });
 
-    function makeMenuItem() {
-        var li = document.createElement('li');
-        li.setAttribute('data-haypop-etalase', 'true');
-        li.innerHTML =
-            '<button type="button" onclick="navigateTo(\'apotek/etalase\', \'Etalase Haypop\')" ' +
-            'class="nav-btn w-full text-left px-3 py-2 rounded-lg text-slate-600 dark:text-slate-300 ' +
-            'hover:bg-primary-50 dark:hover:bg-slate-700 hover:text-primary-600 dark:hover:text-primary-400 ' +
-            'transition-colors flex items-center gap-3" data-page="etalase">' +
-            '<i data-lucide="store" class="w-4 h-4 flex-shrink-0"></i>' +
-            '<span>Etalase Haypop</span>' +
-            '</button>';
-        return li;
-    }
-
-    function addMenuTo(container) {
-        if (!container || !isFinanceRole()) return;
-        if (container.querySelector('[data-page="etalase"]')) return;
-
-        // Cari bagian Operasional Apotek berdasarkan menu Transaksi, sehingga
-        // tidak tergantung bahasa yang sedang aktif.
-        var transaksiBtn = container.querySelector('[data-page="transaksi"]');
-        var list = transaksiBtn ? transaksiBtn.closest('ul') : null;
-
-        // Fallback: cari heading section Operasional Apotek.
-        if (!list) {
-            var paragraphs = container.querySelectorAll('p');
-            for (var i = 0; i < paragraphs.length; i++) {
-                var text = (paragraphs[i].textContent || '').trim();
-                if (text === 'Operasional Apotek' || text === 'Pharmacy Operations' || text === 'Operasional Apoték') {
-                    var section = paragraphs[i].parentElement;
-                    list = section ? section.querySelector('ul') : null;
-                    if (list) break;
-                }
-            }
+        if (!exists) {
+            window.menuStructure.apotek.push({
+                id: 'etalase',
+                label: 'Etalase Haypop',
+                icon: 'store',
+                module: 'apotek/etalase'
+            });
         }
 
-        if (!list) return;
-        list.appendChild(makeMenuItem());
-        if (window.lucide && lucide.createIcons) lucide.createIcons();
-    }
+        registered = true;
 
-    function refresh() {
-        addMenuTo(document.getElementById('sidebar-menu'));
-        addMenuTo(document.getElementById('mobile-sidebar-menu'));
+        // Re-render sidebar memakai mekanisme resmi aplikasi. Role Keuangan
+        // sudah memiliki akses ke section 'apotek', sedangkan role lain tidak
+        // memiliki section tersebut atau item ini tidak akan ditambahkan ke
+        // roleAccess mereka.
+        if (typeof window.renderSidebar === 'function') {
+            var role = window.currentRole || '';
+            if (role) window.renderSidebar(role);
+        }
+        return true;
     }
 
     function start() {
-        refresh();
-
-        var targets = [
-            document.getElementById('sidebar-menu'),
-            document.getElementById('mobile-sidebar-menu')
-        ];
-
-        targets.forEach(function (target) {
-            if (!target || typeof MutationObserver === 'undefined') return;
-            new MutationObserver(function () {
-                refresh();
-            }).observe(target, { childList: true, subtree: true });
-        });
-
-        // Auth dan renderSidebar dapat selesai setelah script ini dimuat.
-        // Polling singkat memastikan menu muncul setelah role tersedia.
-        var attempts = 0;
+        if (register()) return;
         var timer = setInterval(function () {
-            refresh();
             attempts++;
-            if (attempts >= 120) clearInterval(timer);
+            if (register() || attempts >= 120) clearInterval(timer);
         }, 250);
     }
 

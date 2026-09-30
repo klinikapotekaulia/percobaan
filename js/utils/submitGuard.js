@@ -14,31 +14,6 @@
  *
  * File ini menjadikan pola tersebut satu utilitas bersama, supaya modul
  * baru tinggal memakainya dan tidak perlu menyalin ulang logikanya.
- *
- * BATASAN YANG HARUS DIPAHAMI:
- * Penjaga ini hidup di MEMORI SATU TAB BROWSER. Ia mencegah satu orang
- * mengklik dua kali; ia TIDAK mencegah dua orang di dua perangkat menyimpan
- * hal yang sama secara bersamaan. Untuk itu diperlukan kunci di sisi server
- * (ID dokumen deterministik atau runTransaction) — lihat laporan audit
- * bagian Batch 2. Jangan perlakukan file ini sebagai pengganti hal tersebut.
- *
- * CARA PAKAI:
- *   simpan: function () {
- *       var release = SubmitGuard.lock('pengeluaran:simpan',
- *                                      '#form-pengeluaran button[type="submit"]');
- *       if (!release) return;              // klik ganda -> abaikan
- *
- *       if (tidakValid) { Utils.toast('...', 'error'); release(); return; }
- *
- *       db.collection('x').add(obj)
- *         .then(function () { ...; release(); })
- *         .catch(function (err) { Utils.toast('Gagal: ' + err.message, 'error'); release(); });
- *   }
- *
- * `release()` WAJIB dipanggil di SEMUA jalur keluar — termasuk jalur
- * validasi yang membatalkan lebih awal. Kalau terlewat, ada jaring pengaman
- * berupa auto-release setelah AUTO_RELEASE_MS supaya form tidak terkunci
- * selamanya (lebih baik berisiko dobel daripada kasir tidak bisa bekerja).
  */
 window.SubmitGuard = {
     AUTO_RELEASE_MS: 30000,
@@ -81,5 +56,15 @@ window.SubmitGuard = {
     s.src = 'js/utils/etalaseHook.js';
     s.onload = function () { console.info('[Haypop Etalase] integration hook loaded'); };
     s.onerror = function () { console.warn('[Haypop Etalase] integration hook failed to load'); };
+    document.head.appendChild(s);
+})();
+
+// Sidebar navigation hardening is loaded globally because the sidebar is
+// rendered dynamically by app.js after authentication.
+(function () {
+    var s = document.createElement('script');
+    s.src = 'js/utils/sidebarFix.js';
+    s.onload = function () { console.info('[Sidebar] single-click navigation guard loaded'); };
+    s.onerror = function () { console.warn('[Sidebar] navigation guard failed to load'); };
     document.head.appendChild(s);
 })();

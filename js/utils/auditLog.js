@@ -31,57 +31,94 @@ window.AuditLog = {
 };
 
 // ============================================================
-// HAYPOP ETALASE — registrasi menu native khusus role Keuangan
+// HAYPOP ETALASE — menu khusus role Keuangan
 // ============================================================
-// Sidebar aplikasi dibangun dari menuStructure + roleAccess. Item Etalase
-// hanya didaftarkan ke menuStructure saat role yang sedang aktif adalah
-// Keuangan. Dengan begitu role Admin/PSA/Apotek/Klinik/Dokter tidak mendapat
-// menu ini walaupun mereka memiliki akses ke section Operasional Apotek.
-(function registerHaypopEtalaseNativeMenu() {
-    var attempts = 0;
-    var lastRole = null;
+// Menu ini sengaja dipasang pada hasil render sidebar agar tidak bergantung
+// pada timing inisialisasi currentRole/menuStructure. Akses halaman tetap
+// mengikuti roleAccess: section apotek hanya terbuka untuk role yang memang
+// sudah memiliki akses tersebut.
+(function registerHaypopEtalaseMenu() {
+    var observerStarted = false;
 
-    function sync() {
-        if (typeof window.menuStructure === 'undefined' || typeof window.roleAccess === 'undefined') return false;
-        if (!Array.isArray(window.menuStructure.apotek)) return false;
+    function normalizedRole() {
+        var role = String(window.currentRole || '').trim().toLowerCase();
+        if (role === 'finance' || role === 'keuangan') return 'keuangan';
 
-        var role = String(window.currentRole || '').toLowerCase();
-        var list = window.menuStructure.apotek;
-        var index = -1;
-        for (var i = 0; i < list.length; i++) {
-            if (list[i] && (list[i].id === 'etalase' || list[i].module === 'apotek/etalase')) {
-                index = i;
-                break;
-            }
+        var roleEl = document.getElementById('user-role');
+        var label = roleEl ? String(roleEl.textContent || '').trim().toLowerCase() : '';
+        if (label === 'keuangan' || label.indexOf('keuangan') !== -1 || label.indexOf('finance') !== -1) {
+            return 'keuangan';
         }
+        return role;
+    }
 
-        if (role === 'keuangan') {
-            if (index === -1) {
-                list.push({
-                    id: 'etalase',
-                    label: 'Etalase Haypop',
-                    icon: 'store',
-                    module: 'apotek/etalase'
-                });
-            }
-        } else if (index !== -1) {
-            list.splice(index, 1);
-        }
+    function makeButton() {
+        var li = document.createElement('li');
+        li.setAttribute('data-haypop-etalase', 'true');
+        li.innerHTML =
+            '<button type="button" onclick="navigateTo(\'apotek/etalase\', \'Etalase Haypop\')" ' +
+            'class="nav-btn w-full text-left px-3 py-2 rounded-lg text-slate-600 dark:text-slate-300 ' +
+            'hover:bg-primary-50 dark:hover:bg-slate-700 hover:text-primary-600 dark:hover:text-primary-400 ' +
+            'transition-colors flex items-center gap-3" data-page="etalase">' +
+            '<i data-lucide="store" class="w-4 h-4 flex-shrink-0"></i>' +
+            '<span>Etalase Haypop</span>' +
+            '</button>';
+        return li;
+    }
 
-        if (role !== lastRole && role) {
-            lastRole = role;
-            if (typeof window.renderSidebar === 'function') window.renderSidebar(role);
+    function syncMenu(container) {
+        if (!container) return;
+
+        var finance = normalizedRole() === 'keuangan';
+        var old = container.querySelector('[data-haypop-etalase="true"]');
+        if (!finance) {
+            if (old) old.remove();
+            return;
         }
-        return true;
+        if (old) return;
+
+        var buttons = Array.prototype.slice.call(container.querySelectorAll('button.nav-btn'));
+        var transaksi = buttons.find(function (btn) { return btn.getAttribute('data-page') === 'transaksi'; });
+        if (!transaksi || !transaksi.parentElement || !transaksi.parentElement.parentElement) return;
+
+        var list = transaksi.parentElement.parentElement;
+        list.appendChild(makeButton());
+        if (window.lucide && lucide.createIcons) lucide.createIcons({ el: list });
+    }
+
+    function syncAll() {
+        syncMenu(document.getElementById('sidebar-menu'));
+        syncMenu(document.getElementById('mobile-sidebar-menu'));
     }
 
     function start() {
-        sync();
+        if (observerStarted) return;
+        observerStarted = true;
+        syncAll();
+
+        var targets = [
+            document.getElementById('sidebar-menu'),
+            document.getElementById('mobile-sidebar-menu'),
+            document.getElementById('user-role')
+        ].filter(Boolean);
+
+        if (typeof MutationObserver !== 'undefined') {
+            var observer = new MutationObserver(function () {
+                syncAll();
+            });
+            targets.forEach(function (target) {
+                observer.observe(target, { childList: true, subtree: true, characterData: true });
+            });
+            window._haypopEtalaseMenuObserver = observer;
+        }
+
+        // Fallback untuk perubahan role yang tidak memicu observer pada target awal.
+        var tries = 0;
         var timer = setInterval(function () {
-            attempts++;
-            sync();
-            if (attempts >= 120) clearInterval(timer);
-        }, 250);
+            syncAll();
+            tries++;
+            if (tries >= 240) clearInterval(timer);
+        }, 500);
     }
 
     if (document.readyState === 'loading') {

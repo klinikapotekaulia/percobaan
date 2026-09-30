@@ -1,12 +1,7 @@
 /**
  * Sidebar navigation hardening.
- *
- * The sidebar is dynamically rendered by app.js. Older versions mixed inline
- * onclick handlers with a delegated listener. That made navigation fragile
- * when renderSidebar()/lucide rebuilt the DOM. This version converts each
- * sidebar button to a real data-driven button and installs exactly one native
- * listener per rendered button. A delegated capture listener remains as a
- * fallback for a button created between observer cycles.
+ * Also normalizes duplicate Etalase menu entries so only one canonical
+ * "Etalase" entry remains. This is UI-only; it does not touch Etalase data.
  */
 (function () {
     'use strict';
@@ -59,7 +54,6 @@
     function parseNavigation(button) {
         var modulePath = button.getAttribute('data-module') || '';
         var title = button.getAttribute('data-title') || '';
-
         if (!modulePath) {
             var inline = button.getAttribute('onclick') || '';
             var match = inline.match(/navigateTo\(\s*['"]((?:\\.|[^'"])*)['"]\s*,\s*['"]((?:\\.|[^'"])*)['"]\s*\)/);
@@ -75,15 +69,10 @@
         if (!button || !button.matches('.nav-btn')) return;
         if (!button.closest('#sidebar-menu, #mobile-sidebar-menu')) return;
         if (button.dataset.sidebarNavigating === '1') return;
-
         var nav = parseNavigation(button);
         if (!nav.modulePath || typeof window.navigateTo !== 'function') return;
-
         button.dataset.sidebarNavigating = '1';
         window.navigateTo(nav.modulePath, nav.title);
-
-        // Release after the route/render cycle. This prevents duplicate
-        // activation without disabling the button visually.
         setTimeout(function () {
             if (button.isConnected) delete button.dataset.sidebarNavigating;
         }, 500);
@@ -93,16 +82,12 @@
         if (!button || !button.matches('.nav-btn')) return;
         if (!button.closest('#sidebar-menu, #mobile-sidebar-menu')) return;
         if (button.dataset.sidebarWired === '1') return;
-
         var nav = parseNavigation(button);
         if (!nav.modulePath) return;
-
-        // Store route explicitly and remove the fragile inline handler.
         button.setAttribute('data-module', nav.modulePath);
         button.setAttribute('data-title', nav.title);
         button.removeAttribute('onclick');
         button.dataset.sidebarWired = '1';
-
         button.addEventListener('click', function (evt) {
             evt.preventDefault();
             evt.stopPropagation();
@@ -110,14 +95,40 @@
         }, false);
     }
 
+    function normalizeEtalaseMenus(root) {
+        root = root || document;
+        ['#sidebar-menu', '#mobile-sidebar-menu'].forEach(function (selector) {
+            var menu = root.querySelector(selector);
+            if (!menu) return;
+            var buttons = Array.prototype.slice.call(menu.querySelectorAll('.nav-btn'));
+            var etalaseButtons = buttons.filter(function (btn) {
+                var nav = parseNavigation(btn);
+                var text = (btn.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                return nav.modulePath === 'apotek/etalase' || text === 'etalase' || text === 'etalase haypop';
+            });
+            if (!etalaseButtons.length) return;
+
+            var canonical = etalaseButtons.find(function (btn) {
+                return (btn.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase() === 'etalase';
+            }) || etalaseButtons[0];
+
+            var titleNode = canonical.querySelector('.nav-label, [data-nav-label]');
+            if (titleNode) titleNode.textContent = 'Etalase';
+
+            etalaseButtons.forEach(function (btn) {
+                if (btn !== canonical && btn.parentNode) btn.parentNode.removeChild(btn);
+            });
+        });
+    }
+
     function wireAll() {
+        normalizeEtalaseMenus(document);
         document.querySelectorAll('#sidebar-menu .nav-btn, #mobile-sidebar-menu .nav-btn').forEach(wireButton);
     }
 
     function install() {
         installStableSidebarStyle();
         wireAll();
-
         if (!window[OBSERVER_ID]) {
             var observer = new MutationObserver(function () {
                 wireAll();
@@ -125,9 +136,6 @@
             observer.observe(document.body, { childList: true, subtree: true });
             window[OBSERVER_ID] = observer;
         }
-
-        // Safety fallback for a button that is clicked before the observer
-        // callback runs. This is capture phase, but only handles unwired buttons.
         if (!window.__auliaSidebarCaptureInstalled) {
             document.addEventListener('click', function (evt) {
                 var target = evt.target;

@@ -33,50 +33,54 @@ window.AuditLog = {
 // ============================================================
 // HAYPOP ETALASE — registrasi menu native khusus role Keuangan
 // ============================================================
-// Jangan memanipulasi DOM sidebar secara langsung. Aplikasi utama
-// membangun sidebar dari menuStructure + roleAccess. Kita tunggu kedua
-// struktur tersedia, lalu mendaftarkan item ke menuStructure.apotek dan
-// renderSidebar ulang dengan role yang sedang login.
+// Sidebar aplikasi dibangun dari menuStructure + roleAccess. Item Etalase
+// hanya didaftarkan ke menuStructure saat role yang sedang aktif adalah
+// Keuangan. Dengan begitu role Admin/PSA/Apotek/Klinik/Dokter tidak mendapat
+// menu ini walaupun mereka memiliki akses ke section Operasional Apotek.
 (function registerHaypopEtalaseNativeMenu() {
-    var registered = false;
     var attempts = 0;
+    var lastRole = null;
 
-    function register() {
-        if (registered) return true;
+    function sync() {
         if (typeof window.menuStructure === 'undefined' || typeof window.roleAccess === 'undefined') return false;
         if (!Array.isArray(window.menuStructure.apotek)) return false;
 
-        var exists = window.menuStructure.apotek.some(function (item) {
-            return item && (item.id === 'etalase' || item.module === 'apotek/etalase');
-        });
-
-        if (!exists) {
-            window.menuStructure.apotek.push({
-                id: 'etalase',
-                label: 'Etalase Haypop',
-                icon: 'store',
-                module: 'apotek/etalase'
-            });
+        var role = String(window.currentRole || '').toLowerCase();
+        var list = window.menuStructure.apotek;
+        var index = -1;
+        for (var i = 0; i < list.length; i++) {
+            if (list[i] && (list[i].id === 'etalase' || list[i].module === 'apotek/etalase')) {
+                index = i;
+                break;
+            }
         }
 
-        registered = true;
+        if (role === 'keuangan') {
+            if (index === -1) {
+                list.push({
+                    id: 'etalase',
+                    label: 'Etalase Haypop',
+                    icon: 'store',
+                    module: 'apotek/etalase'
+                });
+            }
+        } else if (index !== -1) {
+            list.splice(index, 1);
+        }
 
-        // Re-render sidebar memakai mekanisme resmi aplikasi. Role Keuangan
-        // sudah memiliki akses ke section 'apotek', sedangkan role lain tidak
-        // memiliki section tersebut atau item ini tidak akan ditambahkan ke
-        // roleAccess mereka.
-        if (typeof window.renderSidebar === 'function') {
-            var role = window.currentRole || '';
-            if (role) window.renderSidebar(role);
+        if (role !== lastRole && role) {
+            lastRole = role;
+            if (typeof window.renderSidebar === 'function') window.renderSidebar(role);
         }
         return true;
     }
 
     function start() {
-        if (register()) return;
+        sync();
         var timer = setInterval(function () {
             attempts++;
-            if (register() || attempts >= 120) clearInterval(timer);
+            sync();
+            if (attempts >= 120) clearInterval(timer);
         }, 250);
     }
 

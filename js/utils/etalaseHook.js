@@ -1,0 +1,283 @@
+/**
+ * Haypop Etalase integration hook.
+ * Loaded globally by submitGuard.js so it can extend the dynamically-loaded
+ * transaction module without changing its core flow.
+ */
+(function () {
+    'use strict';
+
+    var H = window.HaypopEtalase = {
+        products: [],
+        selected: {},
+        loaded: false,
+        patchedTransaction: false,
+        patchedReports: false,
+        patchedRunTransaction: false,
+        _productUnsub: null,
+        money: function (n) { return Utils.formatRupiah(Number(n) || 0); },
+        roleCanUse: function () { return ['apotek','admin','keuangan','psa'].indexOf(window.currentRole || '') !== -1; },
+        roleCanManage: function () { return (window.currentRole || '') === 'keuangan'; },
+
+        loadProducts: function () {
+            var self = this;
+            if (!self.roleCanUse()) return;
+            if (self._productUnsub) return;
+            self._productUnsub = db.collection('etalaseProduk').where('aktif', '==', true).orderBy('nama').onSnapshot(function (snap) {
+                self.products = [];
+                snap.forEach(function (doc) { var d = doc.data(); d.id = doc.id; self.products.push(d); });
+                self.loaded = true;
+                self.renderPicker();
+                self.refreshTotal();
+            }, function (err) {
+                self.loaded = false;
+                console.warn('[Haypop Etalase] gagal memuat produk:', err.message);
+            });
+        },
+
+        reset: function () {
+            this.selected = {};
+            this.renderPicker();
+            this.refreshTotal();
+        },
+
+        getItems: function () {
+            var self = this, out = [];
+            Object.keys(this.selected).forEach(function (id) {
+                var p = self.products.find(function (x) { return x.id === id; });
+                if (!p) return;
+                var qty = Math.max(1, parseInt(self.selected[id], 10) || 1);
+                out.push({ produkId: p.id, namaProduk: p.nama, harga: Number(p.harga) || 0, qty: qty, subtotal: (Number(p.harga) || 0) * qty });
+            });
+            return out;
+        },
+
+        total: function () {
+            return this.getItems().reduce(function (s, x) { return s + x.subtotal; }, 0);
+        },
+
+        toggle: function (id, checked) {
+            if (checked) this.selected[id] = 1;
+            else delete this.selected[id];
+            this.renderPicker();
+            this.refreshTotal();
+        },
+
+        setQty: function (id, value) {
+            var q = Math.max(1, parseInt(value, 10) || 1);
+            if (this.selected[id] !== undefined) this.selected[id] = q;
+            this.refreshTotal();
+        },
+
+        renderPicker: function () {
+            var c = document.getElementById('trx-etalase-container');
+            if (!c) return;
+            var self = this;
+            var html = '<div class="border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10 rounded-xl p-4 mt-4">';
+            html += '<div class="flex items-center justify-between mb-3"><div><h3 class="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2"><i data-lucide="store" class="w-4 h-4"></i> Etalase Haypop</h3><p class="text-[11px] text-amber-700/70 dark:text-amber-300/70">Opsional sesuai permintaan konsumen. Tidak masuk HPP/pembagian hasil.</p></div>';
+            html += '<span class="text-xs font-bold text-amber-700 dark:text-amber-300">' + this.money(this.total()) + '</span></div>';
+            if (!this.products.length) html += '<div class="text-xs text-slate-400 py-2">Belum ada produk Etalase aktif.</div>';
+            this.products.forEach(function (p) {
+                var checked = self.selected[p.id] !== undefined;
+                var qty = checked ? self.selected[p.id] : 1;
+                html += '<div class="flex items-center gap-3 py-2 border-t border-amber-100 dark:border-amber-900/40">';
+                html += '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="HaypopEtalase.toggle(\'' + p.id + '\', this.checked)" class="w-4 h-4 accent-amber-600">';
+                html += '<div class="flex-1 min-w-0"><div class="text-sm font-semibold text-slate-800 dark:text-white">' + Utils.escapeHtml(p.nama) + '</div><div class="text-xs text-emerald-600 font-bold">' + this.money(p.harga) + ' / pcs</div></div>';
+                html += '<div class="w-20"><input type="number" min="1" value="' + qty + '" ' + (!checked ? 'disabled' : '') + ' onchange="HaypopEtalase.setQty(\'' + p.id + '\', this.value)" class="w-full px-2 py-1.5 rounded-lg border dark:bg-slate-900 text-sm text-center"></div>';
+                html += '</div>';
+            });
+            html += '<div class="flex justify-between pt-3 mt-2 border-t border-amber-200 dark:border-amber-800 text-sm font-black"><span>Tambahan Etalase</span><span class="text-emerald-600">' + this.money(this.total()) + '</span></div>';
+            html += '</div>';
+            c.innerHTML = html;
+            if (window.lucide) lucide.createIcons({ el: c });
+        },
+
+        refreshTotal: function () {
+            var baseEl = document.getElementById('trx-grand-total');
+            var detailEl = document.getElementById('trx-etalase-total');
+            if (!baseEl) return;
+            var currentText = (baseEl.textContent || '').replace(/[^0-9]/g, '');
+            var base = Number(currentText) || 0;
+            var old = Number(baseEl.getAttribute('data-base-total')) || 0;
+            // First call after the core calculator: remember its total. Subsequent calls
+            // preserve the base and only add Etalase once.
+            if (!old || old === base) {
+                baseEl.setAttribute('data-base-total', String(base));
+            } else {
+                base = old;
+            }
+            var total = base + this.total();
+            baseEl.textContent = this.money(total);
+            if (detailEl) detailEl.textContent = this.money(this.total());
+        },
+
+        patchTransaction: function () {
+            var self = this, M = window.AppApotekTransaksi;
+            if (!M || this.patchedTransaction) return;
+            this.patchedTransaction = true;
+
+            var originalRenderForm = M.renderForm;
+            if (typeof originalRenderForm === 'function') {
+                M.renderForm = function () {
+                    var r = originalRenderForm.apply(this, arguments);
+                    var cart = document.getElementById('trx-cart-container');
+                    if (cart) {
+                        var existing = document.getElementById('trx-etalase-container');
+                        if (existing) existing.remove();
+                        cart.insertAdjacentHTML('afterend', '<div id="trx-etalase-container"></div>' +
+                            '<div class="flex justify-between text-xs mt-2 px-1 text-slate-400"><span>Etalase Haypop</span><span id="trx-etalase-total">Rp\u00a00</span></div>');
+                    }
+                    self.loadProducts();
+                    self.renderPicker();
+                    self.refreshTotal();
+                    return r;
+                };
+            }
+
+            var originalSetTipe = M.setTipe;
+            if (typeof originalSetTipe === 'function') {
+                M.setTipe = function () {
+                    var r = originalSetTipe.apply(this, arguments);
+                    self.reset();
+                    return r;
+                };
+            }
+
+            var originalHitung = M.hitungTotal;
+            if (typeof originalHitung === 'function') {
+                M.hitungTotal = function () {
+                    var r = originalHitung.apply(this, arguments);
+                    setTimeout(function () { self.refreshTotal(); }, 0);
+                    return r;
+                };
+            }
+
+            var originalCetak = M.cetakStruk;
+            if (typeof originalCetak === 'function') {
+                M.cetakStruk = function (data, w) {
+                    var items = self.getItems();
+                    if (items.length) {
+                        data = Object.assign({}, data, {
+                            etalaseItems: items,
+                            etalaseTotal: self.total(),
+                            totalTagihanKonsumen: (Number(data.totalAkhir) || 0) + self.total(),
+                            totalAkhir: (Number(data.totalAkhir) || 0) + self.total()
+                        });
+                    }
+                    return originalCetak.call(this, data, w);
+                };
+            }
+        },
+
+        patchRunTransaction: function () {
+            var self = this;
+            if (this.patchedRunTransaction || !db || typeof db.runTransaction !== 'function') return;
+            this.patchedRunTransaction = true;
+            var original = db.runTransaction.bind(db);
+            db.runTransaction = function (updateFunction, options) {
+                var selectedAtStart = self.getItems();
+                var etalaseTotal = selectedAtStart.reduce(function (s, x) { return s + x.subtotal; }, 0);
+                if (!etalaseTotal) return original(updateFunction, options);
+
+                return original(function (realTx) {
+                    var wrappedTx = new Proxy(realTx, {
+                        get: function (target, prop) {
+                            if (prop !== 'set') return Reflect.get(target, prop, target);
+                            return function (ref, data, options2) {
+                                var out = data;
+                                if (ref && ref.path && ref.path.indexOf('transaksi/') === 0) {
+                                    out = Object.assign({}, data, {
+                                        etalaseItems: selectedAtStart,
+                                        etalaseTotal: etalaseTotal,
+                                        totalTagihanKonsumen: (Number(data.totalAkhir) || 0) + etalaseTotal,
+                                        totalAkhirKeuangan: Number(data.totalAkhir) || 0,
+                                        totalAkhir: (Number(data.totalAkhir) || 0) + etalaseTotal
+                                    });
+                                    var saleRef = db.collection('etalasePenjualan').doc(ref.id);
+                                    target.set(saleRef, {
+                                        transaksiId: ref.id,
+                                        tanggal: out.tanggal || Utils.today(),
+                                        items: selectedAtStart,
+                                        total: etalaseTotal,
+                                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                                        createdByUid: (auth.currentUser && auth.currentUser.uid) || ''
+                                    });
+                                }
+                                return target.set(ref, out, options2);
+                            };
+                        }
+                    });
+                    return updateFunction(wrappedTx);
+                }, options);
+            };
+        },
+
+        patchFinancialReports: function () {
+            var self = this;
+            var modules = [
+                ['AppKeuanganLaporanKeuangan', 'renderReport', 'dataTransaksi'],
+                ['AppLaporanPenjualanHarian', 'renderReport', 'data'],
+                ['AppKeuanganRangkumanBulanan', 'renderReport', 'dataTransaksi'],
+                ['AppKeuanganDashboardKeuangan', 'renderReport', 'dataTransaksi']
+            ];
+            modules.forEach(function (cfg) {
+                var M = window[cfg[0]];
+                if (!M || typeof M[cfg[1]] !== 'function' || M['__haypop_' + cfg[1]]) return;
+                var original = M[cfg[1]];
+                M[cfg[1]] = function () {
+                    var arr = this[cfg[2]];
+                    if (Array.isArray(arr)) {
+                        arr.forEach(function (t) {
+                            if (t && t.etalaseTotal) t.totalAkhir = Number(t.totalAkhirKeuangan) || (Number(t.totalAkhir) - Number(t.etalaseTotal));
+                        });
+                    }
+                    return original.apply(this, arguments);
+                };
+                M['__haypop_' + cfg[1]] = true;
+            });
+        },
+
+        patchDashboardNotice: function () {
+            var role = window.currentRole || '';
+            if (role !== 'apotek' && role !== 'keuangan') return;
+            var title = (document.getElementById('page-title') || {}).textContent || '';
+            if (title.indexOf('Dashboard') === -1) return;
+            if (document.getElementById('haypop-dashboard-notice')) return;
+            var today = Utils.today();
+            db.collection('etalasePenjualan').where('tanggal', '==', today).get().then(function (snap) {
+                if (!snap.size) return;
+                var total = 0, qty = 0;
+                snap.forEach(function (d) { var x=d.data(); total += Number(x.total)||0; (x.items||[]).forEach(function(i){ qty += Number(i.qty)||0; }); });
+                var c = document.getElementById('app-content');
+                if (!c) return;
+                var box = document.createElement('div');
+                box.id = 'haypop-dashboard-notice';
+                box.className = 'mb-4 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 p-4 flex items-center justify-between gap-3';
+                box.innerHTML = '<div><div class="font-bold text-amber-800 dark:text-amber-300">Etalase Haypop Hari Ini</div><div class="text-xs text-amber-700 dark:text-amber-300/80">' + qty + ' produk terjual melalui bundling</div></div><div class="font-black text-emerald-600">' + Utils.formatRupiah(total) + '</div>';
+                c.insertBefore(box, c.firstChild);
+            }).catch(function () {});
+        },
+
+        tick: function () {
+            this.loadProducts();
+            this.patchTransaction();
+            this.patchRunTransaction();
+            this.patchFinancialReports();
+            this.patchDashboardNotice();
+            if (this.roleCanUse()) this.injectMenu();
+        },
+
+        injectMenu: function () {
+            if (!this.roleCanManage()) return;
+            if (document.querySelector('[data-page="etalase"]')) return;
+            var anchor = document.querySelector('[data-page="retur"]');
+            if (!anchor || !anchor.parentElement) return;
+            var li = document.createElement('li');
+            li.innerHTML = '<button onclick="navigateTo(\'apotek/etalase\', \'Etalase Haypop\')" class="nav-btn w-full text-left px-3 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-slate-700 hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center gap-3" data-page="etalase"><i data-lucide="store" class="w-4 h-4 flex-shrink-0"></i><span>Etalase Haypop</span></button>';
+            anchor.parentElement.after(li);
+            if (window.lucide) lucide.createIcons({ el: li });
+        }
+    };
+
+    setInterval(function () { try { H.tick(); } catch (e) { console.warn('[Haypop Etalase]', e); } }, 700);
+    setTimeout(function () { try { H.tick(); } catch (e) {} }, 50);
+})();

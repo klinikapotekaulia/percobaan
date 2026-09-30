@@ -41,58 +41,45 @@
  * selamanya (lebih baik berisiko dobel daripada kasir tidak bisa bekerja).
  */
 window.SubmitGuard = {
-
-    // Jaring pengaman: kalau release() tidak pernah dipanggil (mis. ada
-    // exception yang tidak tertangkap di tengah jalan), kunci dilepas
-    // otomatis setelah 30 detik.
     AUTO_RELEASE_MS: 30000,
-
     _busy: {},
-
-    /**
-     * @param {string} key            Nama unik aksi, mis. 'pengeluaran:simpan'
-     * @param {string} [buttonSelector] Selector tombol simpan; kalau ada,
-     *                                  tombol ikut dinonaktifkan secara visual.
-     * @returns {Function|null}       Fungsi release(), atau null kalau aksi
-     *                                dengan key yang sama masih berjalan.
-     */
     lock: function (key, buttonSelector) {
         if (this._busy[key]) return null;
         this._busy[key] = true;
-
         var self = this;
         var btn = buttonSelector ? document.querySelector(buttonSelector) : null;
         if (btn) {
             btn.disabled = true;
             btn.classList.add('opacity-50', 'cursor-not-allowed');
         }
-
         var released = false;
         var release = function () {
             if (released) return;
             released = true;
             clearTimeout(timer);
             delete self._busy[key];
-            // Tombolnya mungkin sudah hilang dari DOM (modal ditutup /
-            // halaman dirender ulang) — itu wajar, jadi dicek dulu.
             if (btn && btn.isConnected) {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         };
-
         var timer = setTimeout(function () {
             if (!released) {
-                console.warn('[SubmitGuard] release() tidak dipanggil untuk "' + key +
-                             '" — kunci dilepas otomatis. Ada jalur keluar yang terlewat.');
+                console.warn('[SubmitGuard] release() tidak dipanggil untuk "' + key + '" — kunci dilepas otomatis.');
                 release();
             }
         }, this.AUTO_RELEASE_MS);
-
         return release;
     },
-
-    /** Untuk keperluan debug / reset paksa dari konsol. */
     isBusy: function (key) { return !!this._busy[key]; },
     releaseAll: function () { this._busy = {}; }
 };
+
+// Haypop Etalase integration is loaded globally because transaction.js is dynamically loaded.
+(function () {
+    var s = document.createElement('script');
+    s.src = 'js/utils/etalaseHook.js';
+    s.onload = function () { console.info('[Haypop Etalase] integration hook loaded'); };
+    s.onerror = function () { console.warn('[Haypop Etalase] integration hook failed to load'); };
+    document.head.appendChild(s);
+})();

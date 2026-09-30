@@ -74,13 +74,13 @@ service cloud.firestore {
     // Mutasi tidak boleh menjadi pendapatan/biaya; perubahan saldo dua akun
     // dilakukan oleh aplikasi dalam satu Firestore transaction.
     match /rekeningSaldo/{id} {
-      allow read: if isAdminKeuanganPSA();
-      allow create, update: if isAdminKeuanganPSA();
-      allow delete: if isAdminKeuanganPSA() && id != 'kas';
+      allow read: if hasRole(['keuangan', 'psa']);
+      allow create, update: if hasRole(['keuangan', 'psa']);
+      allow delete: if hasRole(['keuangan', 'psa']) && id != 'kas';
     }
     match /mutasiSaldo/{id} {
-      allow read: if isAdminKeuanganPSA();
-      allow create: if isAdminKeuanganPSA()
+      allow read: if hasRole(['keuangan', 'psa']);
+      allow create: if hasRole(['keuangan', 'psa'])
                     && request.resource.data.tipe == 'transfer_internal'
                     && request.resource.data.dariId is string
                     && request.resource.data.keId is string
@@ -100,7 +100,7 @@ service cloud.firestore {
     match /pengaturan/profil { allow read: if isAnyStaff(); allow write: if isAdminKeuanganPSA(); }
     match /pengaturan/satusehatSettings { allow read, write: if isAdminKeuanganPSA(); }
     match /pengaturan/psaInvestasi { allow read, write: if isAdminKeuanganPSA(); }
-    match /pengaturan/landing { allow read: true; allow write: if hasRole(['keuangan', 'psa']); }
+    match /pengaturan/landing { allow read: if true; allow write: if hasRole(['keuangan', 'psa']); }
     match /pengaturanGaji/{id} { allow read, write: if isAdminKeuanganPSA(); }
     match /pengaturanPembagian/{id} { allow read: if isApotekStaff() || isKlinikStaff(); allow write: if isAdminKeuangan(); }
     match /pengaturanPembagianHistory/{id} { allow read: if isAdminKeuangan(); allow create: if isAdminKeuangan(); allow update, delete: if false; }

@@ -3,7 +3,9 @@
  * Strategi: Cache shell statis, skip Firebase/CDN dynamic calls.
  */
 
-var CACHE_NAME = 'aulia-v2.3'; // FIX v2.3: bump cache -- index.html berubah (tambah script imageUploader.js) & banyak modul js diperbarui sesi ini
+// Bump cache version whenever application JS changes so testing browsers do not
+// keep serving an older cached application shell.
+var CACHE_NAME = 'aulia-v2.4';
 
 var SHELL_URLS = [
     './',
@@ -21,7 +23,6 @@ var SHELL_URLS = [
     './js/dashboard.js'
 ];
 
-// Install: cache shell
 self.addEventListener('install', function (event) {
     event.waitUntil(
         caches.open(CACHE_NAME).then(function (cache) {
@@ -38,7 +39,6 @@ self.addEventListener('install', function (event) {
     );
 });
 
-// Activate: bersihkan cache lama
 self.addEventListener('activate', function (event) {
     event.waitUntil(
         caches.keys().then(function (keys) {
@@ -53,24 +53,12 @@ self.addEventListener('activate', function (event) {
     );
 });
 
-// Fetch: stale-while-revalidate untuk file lokal; network-only untuk Firebase & CDN
 self.addEventListener('fetch', function (event) {
     if (event.request.method !== 'GET') return;
 
     var url = new URL(event.request.url);
 
-    // Jangan intercept Firebase, Google APIs, atau CDN eksternal
-    // FIX (BUG GRAFIK "Tren Penjualan Periode" BLANK): 'unpkg.com' sebelumnya TIDAK
-    // ada di daftar ini, padahal index.html memuat React, ReactDOM, & prop-types
-    // (dipakai grafik Tren Penjualan/Recharts) dari unpkg.com. Akibatnya request ke
-    // unpkg.com ikut "ditangkap" oleh fetch handler di bawah alih-alih dibiarkan lewat
-    // apa adanya seperti CDN lain -- kalau fetch lintas-origin itu gagal/lambat
-    // (paling sering terjadi tepat setelah migrasi domain, saat browser & SW registrasi
-    // ulang tanpa cache lama), tidak ada 'cached' fallback utk request pertama, request
-    // gagal total, window.React/ReactDOM tidak pernah ter-define, dan
-    // renderDailySalesChart() di js/dashboard.js retry selamanya tanpa pernah berhasil
-    // -> grafik selalu kosong. Menambahkan 'unpkg.com' di sini membuatnya konsisten
-    // dengan CDN lain (network-only, tidak diintervensi SW).
+    // Jangan intercept Firebase, Google APIs, atau CDN eksternal.
     var bypassHosts = [
         'firestore.googleapis.com',
         'identitytoolkit.googleapis.com',
@@ -87,24 +75,21 @@ self.addEventListener('fetch', function (event) {
         if (url.hostname.indexOf(bypassHosts[i]) !== -1) return;
     }
 
-    // Untuk file lokal: stale-while-revalidate
+    // File lokal: stale-while-revalidate.
     event.respondWith(
         caches.open(CACHE_NAME).then(function (cache) {
             return cache.match(event.request).then(function (cached) {
                 var fetchPromise = fetch(event.request).then(function (response) {
                     if (response && response.status === 200 &&
                         (response.type === 'basic' || response.type === 'cors')) {
-                        // Jangan cache response HTML (index.html fallback) untuk file static non-HTML seperti .js atau .css
                         var contentType = response.headers.get('content-type') || '';
                         var isHtmlResponse = contentType.indexOf('text/html') !== -1;
-                        var isHtmlRequest = event.request.url.indexOf('.html') !== -1 || 
-                                            event.request.url === self.location.origin + '/' || 
+                        var isHtmlRequest = event.request.url.indexOf('.html') !== -1 ||
+                                            event.request.url === self.location.origin + '/' ||
                                             event.request.url === self.location.origin + '/index.html' ||
                                             event.request.url === self.location.origin + './';
-                        
-                        if (isHtmlResponse && !isHtmlRequest) {
-                            // Jangan simpan fallback index.html ke dalam cache untuk file .js/.css/gambar
-                        } else {
+
+                        if (!(isHtmlResponse && !isHtmlRequest)) {
                             cache.put(event.request, response.clone());
                         }
                     }

@@ -3,9 +3,9 @@
  * Strategi: Cache shell statis, skip Firebase/CDN dynamic calls.
  */
 
-// Bump cache version whenever application JS changes so testing browsers do not
-// keep serving an older cached application shell.
-var CACHE_NAME = 'aulia-v2.4';
+// Bump cache version whenever application JS/CSS changes so testing browsers
+// do not keep serving an older cached application shell.
+var CACHE_NAME = 'aulia-v2.5';
 
 var SHELL_URLS = [
     './',

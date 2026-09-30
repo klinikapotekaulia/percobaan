@@ -12,7 +12,7 @@
 }
 
 .spinner.w-3.h-3 { width: 0.75rem; height: 0.75rem; border-width: 0.1em; }
-.spinner.w-3\.5.h-3\.5 { width: 0.875rem; height: 0.875rem; border-width: 0.125em; }
+.spinner.w-3\\.5.h-3\\.5 { width: 0.875rem; height: 0.875rem; border-width: 0.125em; }
 .spinner.w-4.h-4 { width: 1rem; height: 1rem; border-width: 0.125em; }
 
 @keyframes spinner-border { to { transform: rotate(360deg); } }
@@ -32,10 +32,7 @@ header, aside, main, section, div, button, input, select, textarea, table, tr, t
   transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* SIDEBAR NAVIGATION FIX
-   Navigation must behave like a normal button: stable hover, no flash,
-   no animated color interpolation that looks like a blue blink, and one
-   physical click must be sufficient to navigate. */
+/* SIDEBAR NAVIGATION FIX */
 #sidebar-menu .nav-btn,
 #mobile-sidebar-menu .nav-btn {
   cursor: pointer;
@@ -43,7 +40,14 @@ header, aside, main, section, div, button, input, select, textarea, table, tr, t
   -webkit-tap-highlight-color: transparent;
   outline: none !important;
   transform: none !important;
-  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease !important;
+  transition: none !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#sidebar-menu .nav-btn > *,
+#mobile-sidebar-menu .nav-btn > * {
+  pointer-events: none;
 }
 
 #sidebar-menu .nav-btn:hover,
@@ -61,15 +65,11 @@ header, aside, main, section, div, button, input, select, textarea, table, tr, t
 }
 
 #sidebar-menu .nav-btn:focus,
-#mobile-sidebar-menu .nav-btn:focus {
+#sidebar-menu .nav-btn:focus-visible,
+#mobile-sidebar-menu .nav-btn:focus,
+#mobile-sidebar-menu .nav-btn:focus-visible {
   outline: none !important;
   box-shadow: none !important;
-}
-
-#sidebar-menu .nav-btn:focus-visible,
-#mobile-sidebar-menu .nav-btn:focus-visible {
-  outline: 2px solid rgba(14, 165, 233, 0.35) !important;
-  outline-offset: -2px;
 }
 
 .dark #sidebar-menu .nav-btn:hover,
@@ -84,7 +84,6 @@ header, aside, main, section, div, button, input, select, textarea, table, tr, t
   color: #7dd3fc !important;
 }
 
-/* Keep the active page state visually distinct without relying on hover animation. */
 #sidebar-menu .nav-btn.bg-primary-50,
 #mobile-sidebar-menu .nav-btn.bg-primary-50 {
   background-color: #f0f9ff !important;
@@ -95,6 +94,15 @@ header, aside, main, section, div, button, input, select, textarea, table, tr, t
 .dark #mobile-sidebar-menu .nav-btn.dark\\:bg-slate-700 {
   background-color: #334155 !important;
   color: #38bdf8 !important;
+}
+
+/* Prevent generic global transitions from affecting sidebar navigation. */
+#sidebar-menu .nav-btn,
+#sidebar-menu .nav-btn *,
+#mobile-sidebar-menu .nav-btn,
+#mobile-sidebar-menu .nav-btn * {
+  transition: none !important;
+  animation: none !important;
 }
 
 /* Scrollbar styling for a cleaner look */
@@ -145,3 +153,19 @@ input, select, textarea, button { max-width: 100%; }
 #app-content > div { width: 100%; max-width: 1280px; margin-left: auto; margin-right: auto; }
 .cyber-hud-bar { width: 100%; box-sizing: border-box; }
 @media (max-width: 640px) { .cyber-hud-bar { justify-content: center !important; text-align: center; gap: 0.5rem; } }
+
+/* FINAL SIDEBAR STABILITY: no visual flash and no delayed focus state. */
+#sidebar-menu .nav-btn,
+#mobile-sidebar-menu .nav-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-touch-callout: none;
+  will-change: auto;
+}
+#sidebar-menu .nav-btn::before,
+#sidebar-menu .nav-btn::after,
+#mobile-sidebar-menu .nav-btn::before,
+#mobile-sidebar-menu .nav-btn::after {
+  transition: none !important;
+  animation: none !important;
+}

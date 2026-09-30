@@ -40,168 +40,57 @@ window.AppApotekEtalase = {
     simpanProduk:function(id){var nama=(document.getElementById('etalase-nama').value||'').trim(),harga=Number(document.getElementById('etalase-harga').value)||0,aktif=!!document.getElementById('etalase-aktif').checked;if(!nama){Utils.toast('Nama produk wajib diisi.','error');return;}if(harga<=0){Utils.toast('Harga harus lebih dari 0.','error');return;}var data={nama:nama,harga:harga,aktif:aktif,updatedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedByUid:(auth.currentUser&&auth.currentUser.uid)||''};var op=id?db.collection('etalaseProduk').doc(id).update(data):db.collection('etalaseProduk').add(Object.assign(data,{createdAt:firebase.firestore.FieldValue.serverTimestamp()}));op.then(function(){Utils.closeModal();Utils.toast('Produk Etalase tersimpan.','success');}).catch(function(e){Utils.toast('Gagal menyimpan: '+e.message,'error');});}
 };
 
-/*
- * INTEGRASI TRANSAKSI HAYPOP
- *
- * Prinsip keuangan:
- * - totalAkhir transaksi lama TIDAK diubah: ini tetap basis keuangan/HPP obat.
- * - totalBayarKonsumen = totalAkhir + etalaseTotal hanya untuk tagihan konsumen.
- * - etalasePenjualan adalah catatan terpisah.
- * - Etalase tidak menyentuh stok obat, HPP, payroll, jurnal, atau laporan keuangan.
- * - Penjualan etalase ditulis atomik bersama transaksi utama.
- */
 (function () {
     var patched = false;
-
     function money(n) { return Number(n) || 0; }
-
     function getSelection() {
-        var rows = document.querySelectorAll('[data-etalase-row]');
-        var items = [];
+        var rows = document.querySelectorAll('[data-etalase-row]'), items = [];
         rows.forEach(function (row) {
-            var productId = row.querySelector('[data-etalase-product]');
-            var qtyEl = row.querySelector('[data-etalase-qty]');
+            var productId = row.querySelector('[data-etalase-product]'), qtyEl = row.querySelector('[data-etalase-qty]');
             if (!productId || !productId.value) return;
             var p = (window.AppApotekEtalase.produk || []).find(function (x) { return x.id === productId.value; });
             if (!p || p.aktif === false) return;
             var qty = Math.max(1, parseInt(qtyEl && qtyEl.value, 10) || 1);
-            items.push({ produkId: p.id, namaProduk: p.nama || '-', harga: money(p.harga), qty: qty, subtotal: money(p.harga) * qty });
+            items.push({ produkId:p.id, namaProduk:p.nama||'-', harga:money(p.harga), qty:qty, subtotal:money(p.harga)*qty });
         });
         return items;
     }
-
-    function etalaseTotal() {
-        return getSelection().reduce(function (s, i) { return s + i.subtotal; }, 0);
+    function etalaseTotal() { return getSelection().reduce(function(s,i){return s+i.subtotal;},0); }
+    function loadActiveProducts() {
+        if (window.AppApotekEtalase._unsubTransaksiProduk) return;
+        window.AppApotekEtalase._unsubTransaksiProduk = db.collection('etalaseProduk').where('aktif','==',true).onSnapshot(function(snap){
+            window.AppApotekEtalase.produk=[];
+            snap.forEach(function(doc){var d=doc.data();d.id=doc.id;window.AppApotekEtalase.produk.push(d);});
+            window.AppApotekEtalase.produk.sort(function(a,b){return String(a.nama||'').localeCompare(String(b.nama||''));});
+        }, function(err){ console.error('Gagal memuat produk Etalase untuk transaksi:', err); });
     }
-
-    function injectUI(app) {
-        var content = document.getElementById('trx-content');
-        if (!content || document.getElementById('trx-etalase-box')) return;
-        var box = document.createElement('div');
-        box.id = 'trx-etalase-box';
-        box.className = 'bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-amber-800 p-5 mb-4';
-        box.innerHTML = '<div class="flex items-center justify-between gap-3 mb-3">' +
-            '<div><h3 class="font-semibold text-gray-800 dark:text-white">Etalase Haypop</h3><p class="text-xs text-slate-500">Opsional — hanya ditambahkan jika konsumen memilih bundling.</p></div>' +
-            '<label class="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input id="trx-etalase-toggle" type="checkbox" class="w-4 h-4" onchange="AppApotekEtalase.toggleTransaksi(this.checked)"> Tambahkan Etalase</label>' +
-            '</div><div id="trx-etalase-items" class="hidden space-y-2"></div>' +
-            '<button id="trx-etalase-add" type="button" class="hidden mt-3 text-sm font-semibold text-primary-600" onclick="AppApotekEtalase.tambahBarisTransaksi()">+ Tambah produk Etalase</button>';
-        var totalBox = content.querySelector('.bg-white.dark\\:bg-slate-800.rounded-xl.border.border-slate-200');
-        if (totalBox) content.insertBefore(box, totalBox); else content.appendChild(box);
-        app._renderEtalaseRows = function () {
-            var list = document.getElementById('trx-etalase-items');
-            if (!list) return;
-            var active = document.getElementById('trx-etalase-toggle');
-            if (!active || !active.checked) { list.innerHTML = ''; list.classList.add('hidden'); var add=document.getElementById('trx-etalase-add'); if(add)add.classList.add('hidden'); return; }
-            list.classList.remove('hidden');
-            var addBtn=document.getElementById('trx-etalase-add'); if(addBtn)addBtn.classList.remove('hidden');
-            if (!list.children.length) addRow();
-        };
-    }
-
     function addRow() {
-        var list = document.getElementById('trx-etalase-items');
-        if (!list) return;
-        var row = document.createElement('div');
-        row.setAttribute('data-etalase-row', '1');
-        row.className = 'grid grid-cols-1 sm:grid-cols-[1fr_110px_130px_36px] gap-2 items-center';
-        var options = '<option value="">-- Pilih Produk --</option>';
-        (window.AppApotekEtalase.produk || []).filter(function(p){ return p.aktif !== false; }).forEach(function(p){ options += '<option value="'+Utils.escapeHtml(p.id)+'">'+Utils.escapeHtml(p.nama)+' — '+Utils.formatRupiah(p.harga)+'</option>'; });
-        row.innerHTML = '<select data-etalase-product class="w-full px-3 py-2 border rounded-lg text-sm dark:bg-slate-700 dark:text-white" onchange="AppApotekEtalase.refreshTransaksiTotal()">'+options+'</select>' +
-            '<input data-etalase-qty type="number" min="1" value="1" class="w-full px-3 py-2 border rounded-lg text-sm text-center dark:bg-slate-700 dark:text-white" oninput="AppApotekEtalase.refreshTransaksiTotal()" title="Qty" />' +
-            '<div data-etalase-subtotal class="px-3 py-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm font-semibold text-right">Rp 0</div>' +
-            '<button type="button" class="p-2 text-red-500" onclick="this.closest(\'[data-etalase-row]\').remove(); AppApotekEtalase.refreshTransaksiTotal();"><i data-lucide="x" class="w-4 h-4"></i></button>';
-        list.appendChild(row);
-        if (window.lucide) lucide.createIcons({nodes:[row]});
+        var list=document.getElementById('trx-etalase-items'); if(!list)return;
+        var row=document.createElement('div'); row.setAttribute('data-etalase-row','1'); row.className='grid grid-cols-1 sm:grid-cols-[1fr_110px_130px_36px] gap-2 items-center';
+        var options='<option value="">-- Pilih Produk --</option>';
+        (window.AppApotekEtalase.produk||[]).filter(function(p){return p.aktif!==false;}).forEach(function(p){options+='<option value="'+Utils.escapeHtml(p.id)+'">'+Utils.escapeHtml(p.nama)+' — '+Utils.formatRupiah(p.harga)+'</option>';});
+        row.innerHTML='<select data-etalase-product class="w-full px-3 py-2 border rounded-lg text-sm dark:bg-slate-700 dark:text-white" onchange="AppApotekEtalase.refreshTransaksiTotal()">'+options+'</select><input data-etalase-qty type="number" min="1" value="1" class="w-full px-3 py-2 border rounded-lg text-sm text-center dark:bg-slate-700 dark:text-white" oninput="AppApotekEtalase.refreshTransaksiTotal()" title="Qty" /><div data-etalase-subtotal class="px-3 py-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm font-semibold text-right">Rp 0</div><button type="button" class="p-2 text-red-500" onclick="this.closest(\'[data-etalase-row]\').remove(); AppApotekEtalase.refreshTransaksiTotal();"><i data-lucide="x" class="w-4 h-4"></i></button>';
+        list.appendChild(row); if(window.lucide)lucide.createIcons({nodes:[row]});
     }
-
-    window.AppApotekEtalase.toggleTransaksi = function (checked) {
-        var list = document.getElementById('trx-etalase-items');
-        var add = document.getElementById('trx-etalase-add');
-        if (checked) {
-            if (list) { list.classList.remove('hidden'); if (!list.children.length) addRow(); }
-            if (add) add.classList.remove('hidden');
-        } else {
-            if (list) { list.innerHTML=''; list.classList.add('hidden'); }
-            if (add) add.classList.add('hidden');
-        }
-        AppApotekEtalase.refreshTransaksiTotal();
-    };
-    window.AppApotekEtalase.tambahBarisTransaksi = addRow;
-    window.AppApotekEtalase.refreshTransaksiTotal = function () {
-        var items = getSelection();
-        items.forEach(function(i){
-            var rows=document.querySelectorAll('[data-etalase-row]');
-            rows.forEach(function(row){var s=row.querySelector('[data-etalase-subtotal]');var sel=row.querySelector('[data-etalase-product]');if(s&&sel&&sel.value===i.produkId){s.textContent=Utils.formatRupiah(i.subtotal);}});
-        });
-        var base = Number(AppApotekTransaksi._lastCalculatedTotal || 0);
-        var grand = document.getElementById('trx-grand-total');
-        if (grand && document.getElementById('trx-etalase-toggle') && document.getElementById('trx-etalase-toggle').checked) grand.textContent=Utils.formatRupiah(base + items.reduce(function(s,i){return s+i.subtotal;},0));
-    };
-
-    function patchWhenReady() {
-        if (patched || !window.AppApotekTransaksi || !window.AppApotekEtalase) return;
-        patched = true;
-        var app = window.AppApotekTransaksi;
-        var originalRenderForm = app.renderForm;
-        app.renderForm = function () {
-            var result = originalRenderForm.apply(this, arguments);
-            injectUI(this);
-            return result;
-        };
-
-        var originalHitungTotal = app.hitungTotal;
-        app.hitungTotal = function () {
-            var result = originalHitungTotal.apply(this, arguments);
-            var baseText = document.getElementById('trx-grand-total');
-            var currentBase = 0;
-            if (baseText) {
-                var raw = (baseText.textContent || '').replace(/[^0-9]/g, '');
-                currentBase = Number(raw) || 0;
-            }
-            this._lastCalculatedTotal = currentBase;
-            if (document.getElementById('trx-etalase-toggle') && document.getElementById('trx-etalase-toggle').checked) {
-                var add = etalaseTotal();
-                baseText.textContent = Utils.formatRupiah(currentBase + add);
-            }
-            return result;
-        };
-
-        var originalCetak = app.cetakStruk;
-        app.cetakStruk = function (data, w) {
-            if (data && data.totalBayarKonsumen) {
-                var receiptData = Object.assign({}, data, { totalAkhir: data.totalBayarKonsumen });
-                return originalCetak.call(this, receiptData, w);
-            }
-            return originalCetak.apply(this, arguments);
-        };
-
-        var originalRunTransaction = db.runTransaction.bind(db);
-        db.runTransaction = function (updateFunction) {
-            var pendingItems = getSelection();
-            var pendingTotal = pendingItems.reduce(function(s,i){return s+i.subtotal;},0);
-            var pendingEnabled = !!(document.getElementById('trx-etalase-toggle') && document.getElementById('trx-etalase-toggle').checked && pendingItems.length);
-            return originalRunTransaction(function (tx) {
-                var originalSet = tx.set.bind(tx);
-                tx.set = function (ref, data, options) {
-                    if (pendingEnabled && ref && ref.path && ref.path.indexOf('transaksi/') === 0 && data && typeof data === 'object') {
-                        data.etalaseItems = pendingItems;
-                        data.etalaseTotal = pendingTotal;
-                        data.totalBayarKonsumen = money(data.totalAkhir) + pendingTotal;
-                        data.etalaseBundling = true;
-                        originalSet(ref, data, options);
-                        var saleRef = db.collection('etalasePenjualan').doc(ref.id);
-                        tx.set(saleRef, { transaksiId: ref.id, tanggal: data.tanggal || Utils.today(), items: pendingItems, total: pendingTotal, createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdByUid: (auth.currentUser && auth.currentUser.uid) || '' });
-                        return;
-                    }
-                    return originalSet(ref, data, options);
-                };
-                return updateFunction(tx);
-            });
-        };
+    function injectUI(app) {
+        var content=document.getElementById('trx-content'); if(!content||document.getElementById('trx-etalase-box'))return;
+        var box=document.createElement('div'); box.id='trx-etalase-box'; box.className='bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-amber-800 p-5 mb-4';
+        box.innerHTML='<div class="flex items-center justify-between gap-3 mb-3"><div><h3 class="font-semibold text-gray-800 dark:text-white">Etalase Haypop</h3><p class="text-xs text-slate-500">Opsional — hanya ditambahkan jika konsumen memilih bundling.</p></div><label class="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input id="trx-etalase-toggle" type="checkbox" class="w-4 h-4" onchange="AppApotekEtalase.toggleTransaksi(this.checked)"> Tambahkan Etalase</label></div><div id="trx-etalase-items" class="hidden space-y-2"></div><button id="trx-etalase-add" type="button" class="hidden mt-3 text-sm font-semibold text-primary-600" onclick="AppApotekEtalase.tambahBarisTransaksi()">+ Tambah produk Etalase</button>';
+        var totalBox=content.querySelector('.bg-white.dark\\:bg-slate-800.rounded-xl.border.border-slate-200'); if(totalBox)content.insertBefore(box,totalBox);else content.appendChild(box);
     }
-
-    var timer = setInterval(function () {
-        if (window.AppApotekTransaksi) { clearInterval(timer); patchWhenReady(); }
-    }, 100);
-    if (window.AppApotekTransaksi) patchWhenReady();
+    window.AppApotekEtalase.toggleTransaksi=function(checked){var list=document.getElementById('trx-etalase-items'),add=document.getElementById('trx-etalase-add');if(checked){loadActiveProducts();if(list){list.classList.remove('hidden');if(!list.children.length){setTimeout(addRow,250);}}if(add)add.classList.remove('hidden');}else{if(list){list.innerHTML='';list.classList.add('hidden');}if(add)add.classList.add('hidden');}AppApotekEtalase.refreshTransaksiTotal();};
+    window.AppApotekEtalase.tambahBarisTransaksi=addRow;
+    window.AppApotekEtalase.refreshTransaksiTotal=function(){var items=getSelection(),rows=document.querySelectorAll('[data-etalase-row]');rows.forEach(function(row){var sel=row.querySelector('[data-etalase-product]'),sub=row.querySelector('[data-etalase-subtotal]'),p=sel&&sel.value?(window.AppApotekEtalase.produk||[]).find(function(x){return x.id===sel.value;}):null,q=row.querySelector('[data-etalase-qty]');if(sub)sub.textContent=p?Utils.formatRupiah(money(p.harga)*(Math.max(1,parseInt(q&&q.value,10)||1))):'Rp 0';});var grand=document.getElementById('trx-grand-total');if(grand&&document.getElementById('trx-etalase-toggle')&&document.getElementById('trx-etalase-toggle').checked){var raw=(grand.textContent||'').replace(/[^0-9]/g,'');grand.textContent=Utils.formatRupiah((Number(raw)||0)+items.reduce(function(s,i){return s+i.subtotal;},0));}};
+    function patchWhenReady(){
+        if(patched||!window.AppApotekTransaksi||!window.AppApotekEtalase)return; patched=true; loadActiveProducts();
+        var app=window.AppApotekTransaksi, originalRenderForm=app.renderForm;
+        app.renderForm=function(){var r=originalRenderForm.apply(this,arguments);injectUI(this);return r;};
+        var originalHitungTotal=app.hitungTotal;
+        app.hitungTotal=function(){var r=originalHitungTotal.apply(this,arguments),grand=document.getElementById('trx-grand-total'),base=0;if(grand){base=Number((grand.textContent||'').replace(/[^0-9]/g,''))||0;this._lastCalculatedTotal=base;if(document.getElementById('trx-etalase-toggle')&&document.getElementById('trx-etalase-toggle').checked)grand.textContent=Utils.formatRupiah(base+etalaseTotal());}return r;};
+        var originalCetak=app.cetakStruk;
+        app.cetakStruk=function(data,w){if(data&&data.totalBayarKonsumen)return originalCetak.call(this,Object.assign({},data,{totalAkhir:data.totalBayarKonsumen}),w);return originalCetak.apply(this,arguments);};
+        var originalRunTransaction=db.runTransaction.bind(db);
+        db.runTransaction=function(updateFunction){var pendingItems=getSelection(),pendingTotal=pendingItems.reduce(function(s,i){return s+i.subtotal;},0),pendingEnabled=!!(document.getElementById('trx-etalase-toggle')&&document.getElementById('trx-etalase-toggle').checked&&pendingItems.length);return originalRunTransaction(function(tx){var originalSet=tx.set.bind(tx);tx.set=function(ref,data,options){if(pendingEnabled&&ref&&ref.path&&ref.path.indexOf('transaksi/')===0&&data&&typeof data==='object'){data.etalaseItems=pendingItems;data.etalaseTotal=pendingTotal;data.totalBayarKonsumen=money(data.totalAkhir)+pendingTotal;data.etalaseBundling=true;originalSet(ref,data,options);var saleRef=db.collection('etalasePenjualan').doc(ref.id);tx.set(saleRef,{transaksiId:ref.id,tanggal:data.tanggal||Utils.today(),items:pendingItems,total:pendingTotal,createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdByUid:(auth.currentUser&&auth.currentUser.uid)||''});return;}return originalSet(ref,data,options);};return updateFunction(tx);});};
+    }
+    var timer=setInterval(function(){if(window.AppApotekTransaksi){clearInterval(timer);patchWhenReady();}},100); if(window.AppApotekTransaksi)patchWhenReady();
 })();

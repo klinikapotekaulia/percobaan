@@ -31,33 +31,22 @@ window.AuditLog = {
 };
 
 // ============================================================
-// HAYPOP ETALASE — UI menu khusus role Keuangan
-//
-// Tidak mengganti buildSidebarHtml. renderSidebar() menulis ulang
-// isi sidebar secara langsung, sehingga hook terhadap buildSidebarHtml
-// dapat kehilangan perubahan. Sebagai gantinya, observer menambahkan
-// item menu setelah sidebar selesai dirender dan setiap kali dirender ulang.
+// HAYPOP ETALASE — menu khusus role Keuangan
 // ============================================================
 (function initHaypopEtalaseMenu() {
-    function addMenuTo(container) {
-        if (!container || window.currentRole !== 'keuangan') return;
-        if (container.querySelector('[data-page="etalase"]')) return;
+    function isFinanceRole() {
+        if (String(window.currentRole || '').toLowerCase() === 'keuangan') return true;
 
-        var paragraphs = container.querySelectorAll('p');
-        var section = null;
-        for (var i = 0; i < paragraphs.length; i++) {
-            var text = (paragraphs[i].textContent || '').trim();
-            if (text === 'Operasional Apotek' || text === 'Pharmacy Operations' || text === 'Operasional Apoték') {
-                section = paragraphs[i].parentElement;
-                break;
-            }
-        }
-        if (!section) return;
+        var roleEl = document.getElementById('user-role');
+        var roleText = roleEl ? String(roleEl.textContent || '').trim().toLowerCase() : '';
+        if (roleText === 'keuangan' || roleText.indexOf('keuangan') !== -1) return true;
 
-        var list = section.querySelector('ul');
-        if (!list) return;
+        return false;
+    }
 
+    function makeMenuItem() {
         var li = document.createElement('li');
+        li.setAttribute('data-haypop-etalase', 'true');
         li.innerHTML =
             '<button type="button" onclick="navigateTo(\'apotek/etalase\', \'Etalase Haypop\')" ' +
             'class="nav-btn w-full text-left px-3 py-2 rounded-lg text-slate-600 dark:text-slate-300 ' +
@@ -66,13 +55,37 @@ window.AuditLog = {
             '<i data-lucide="store" class="w-4 h-4 flex-shrink-0"></i>' +
             '<span>Etalase Haypop</span>' +
             '</button>';
-        list.appendChild(li);
+        return li;
+    }
 
-        if (window.lucide && lucide.createIcons) lucide.createIcons({ el: li });
+    function addMenuTo(container) {
+        if (!container || !isFinanceRole()) return;
+        if (container.querySelector('[data-page="etalase"]')) return;
+
+        // Cari bagian Operasional Apotek berdasarkan menu Transaksi, sehingga
+        // tidak tergantung bahasa yang sedang aktif.
+        var transaksiBtn = container.querySelector('[data-page="transaksi"]');
+        var list = transaksiBtn ? transaksiBtn.closest('ul') : null;
+
+        // Fallback: cari heading section Operasional Apotek.
+        if (!list) {
+            var paragraphs = container.querySelectorAll('p');
+            for (var i = 0; i < paragraphs.length; i++) {
+                var text = (paragraphs[i].textContent || '').trim();
+                if (text === 'Operasional Apotek' || text === 'Pharmacy Operations' || text === 'Operasional Apoték') {
+                    var section = paragraphs[i].parentElement;
+                    list = section ? section.querySelector('ul') : null;
+                    if (list) break;
+                }
+            }
+        }
+
+        if (!list) return;
+        list.appendChild(makeMenuItem());
+        if (window.lucide && lucide.createIcons) lucide.createIcons();
     }
 
     function refresh() {
-        if (window.currentRole !== 'keuangan') return;
         addMenuTo(document.getElementById('sidebar-menu'));
         addMenuTo(document.getElementById('mobile-sidebar-menu'));
     }
@@ -84,6 +97,7 @@ window.AuditLog = {
             document.getElementById('sidebar-menu'),
             document.getElementById('mobile-sidebar-menu')
         ];
+
         targets.forEach(function (target) {
             if (!target || typeof MutationObserver === 'undefined') return;
             new MutationObserver(function () {
@@ -91,13 +105,13 @@ window.AuditLog = {
             }).observe(target, { childList: true, subtree: true });
         });
 
-        // renderSidebar dipanggil setelah auth state selesai. Polling singkat
-        // memastikan menu muncul walaupun sidebar dirender beberapa saat kemudian.
+        // Auth dan renderSidebar dapat selesai setelah script ini dimuat.
+        // Polling singkat memastikan menu muncul setelah role tersedia.
         var attempts = 0;
         var timer = setInterval(function () {
             refresh();
             attempts++;
-            if (attempts >= 60) clearInterval(timer);
+            if (attempts >= 120) clearInterval(timer);
         }, 250);
     }
 

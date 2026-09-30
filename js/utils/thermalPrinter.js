@@ -368,6 +368,13 @@ window.ThermalPrinter = {
                 addTwoColumns('Pembulatan:', Utils.formatRupiah(data.pembulatan), false);
             }
             addTwoColumns('TOTAL AKHIR:', Utils.formatRupiah(data.totalAkhir), true);
+            // Etalase Haypop: terpisah dari totalAkhir (tidak masuk keuangan apotek)
+            if (data.etalaseItems && data.etalaseItems.length) {
+                data.etalaseItems.forEach(function (e) {
+                    addTwoColumns((e.namaProduk || '-') + ' x' + e.qty, Utils.formatRupiah(e.subtotal), false);
+                });
+                addTwoColumns('TOTAL BAYAR:', Utils.formatRupiah(data.totalBayarKonsumen || ((data.totalAkhir || 0) + (data.etalaseTotal || 0))), true);
+            }
 
             addDivider();
 

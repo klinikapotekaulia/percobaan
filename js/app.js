@@ -766,7 +766,9 @@ var menuStructure = {
         { id: 'pembelian',   label: 'Pembelian',    icon: 'truck',           module: 'apotek/pembelian'    },
         { id: 'stockOpname', label: 'Stok Opname',  icon: 'clipboard-check', module: 'apotek/stockOpname'  },
         { id: 'notifikasi',  label: 'Notifikasi',   icon: 'bell',            module: 'apotek/notifikasi'   },
-        { id: 'retur',       label: 'Retur Obat',   icon: 'undo-2',          module: 'apotek/retur'        }
+        { id: 'retur',       label: 'Retur Obat',   icon: 'undo-2',          module: 'apotek/retur'        },
+        // Satu-satunya entri Etalase (khusus role Keuangan, lihat buildSidebarHtml).
+        { id: 'etalase',     label: 'Etalase Haypop', icon: 'store',         module: 'apotek/etalase'      }
     ],
     laporan: [
         { id: 'hutang',          label: 'Hutang Usaha',      icon: 'file-text',     module: 'laporan/hutang'         },
@@ -865,6 +867,9 @@ function buildSidebarHtml(role) {
             // Admin, PSA, dan Keuangan -- role apotek/klinik/dokter tidak boleh melihatnya
             // meskipun section 'apotek' terbuka untuk mereka.
             if (menu.id === 'penjualan' && role !== 'admin' && role !== 'psa' && role !== 'keuangan') return;
+
+            // Etalase Haypop: hanya role Keuangan (sesuai E.init di etalase.js)
+            if (menu.id === 'etalase' && role !== 'keuangan') return;
 
             // FITUR BARU: menu Tindakan & Besaran Klinik (jumlah & besaran tindakan) hanya untuk role Keuangan
             if (menu.id === 'rekap-tindakan' && role !== 'keuangan') return;

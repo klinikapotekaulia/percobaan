@@ -90,8 +90,8 @@ header, aside, main, section, div, button, input, select, textarea, table, tr, t
   color: #0284c7 !important;
 }
 
-.dark #sidebar-menu .nav-btn.dark\\:bg-slate-700,
-.dark #mobile-sidebar-menu .nav-btn.dark\\:bg-slate-700 {
+.dark #sidebar-menu .nav-btn.dark\:bg-slate-700,
+.dark #mobile-sidebar-menu .nav-btn.dark\:bg-slate-700 {
   background-color: #334155 !important;
   color: #38bdf8 !important;
 }

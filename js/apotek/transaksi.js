@@ -1562,6 +1562,14 @@ window.AppApotekTransaksi = {
             if (data.jasaResep > 0) html += '<tr><td>Jasa Resep</td><td class="right">' + Utils.formatRupiah(data.jasaResep) + '</td></tr>';
             if (data.pembulatan > 0) html += '<tr><td>Pembulatan</td><td class="right">' + Utils.formatRupiah(data.pembulatan) + '</td></tr>';
             html += '<tr class="bold"><td>TOTAL</td><td class="right">' + Utils.formatRupiah(data.totalAkhir) + '</td></tr>';
+            // Etalase Haypop: ditampilkan terpisah, TIDAK termasuk totalAkhir yang tersimpan/keuangan.
+            if (data.etalaseItems && data.etalaseItems.length) {
+                html += '<tr><td colspan="2"><hr></td></tr><tr><td colspan="2" class="bold">Etalase Haypop</td></tr>';
+                data.etalaseItems.forEach(function(e) {
+                    html += '<tr><td>' + Utils.escapeHtml(e.namaProduk || '-') + ' x' + e.qty + '</td><td class="right">' + Utils.formatRupiah(e.subtotal) + '</td></tr>';
+                });
+                html += '<tr class="bold"><td>TOTAL BAYAR</td><td class="right">' + Utils.formatRupiah(data.totalBayarKonsumen || ((data.totalAkhir || 0) + (data.etalaseTotal || 0))) + '</td></tr>';
+            }
             html += '</table><hr>';
             
             // 6. Footers

@@ -1,19 +1,7 @@
 /**
  * js/utils/submitGuard.js
  * ============================================================
- * PERBAIKAN AUDIT (Juli 2026) — TEMUAN #10: klik ganda pada form keuangan.
- *
- * Latar belakang:
- * Pola penjaga klik-ganda (`_isSaving` + `btn.disabled` + `_resetGuard()`)
- * sudah ditulis dengan benar di lima modul — transaksi, retur, pembelian,
- * rekamMedis, antrian — tapi disalin manual satu per satu, sehingga delapan
- * modul lain (justru yang menyangkut uang: pengeluaran, pendapatan lain,
- * piutang, jurnal manual, absensi manual, master obat/pasien/karyawan)
- * tidak pernah kebagian. Akibatnya menekan Enter dua kali atau double-tap
- * di tablet menghasilkan DUA dokumen identik dengan ID berbeda.
- *
- * File ini menjadikan pola tersebut satu utilitas bersama, supaya modul
- * baru tinggal memakainya dan tidak perlu menyalin ulang logikanya.
+ * Shared submit guard for finance/transaction forms.
  */
 window.SubmitGuard = {
     AUTO_RELEASE_MS: 30000,
@@ -59,12 +47,7 @@ window.SubmitGuard = {
     document.head.appendChild(s);
 })();
 
-// Sidebar navigation hardening is loaded globally because the sidebar is
-// rendered dynamically by app.js after authentication.
-(function () {
-    var s = document.createElement('script');
-    s.src = 'js/utils/sidebarFix.js';
-    s.onload = function () { console.info('[Sidebar] single-click navigation guard loaded'); };
-    s.onerror = function () { console.warn('[Sidebar] navigation guard failed to load'); };
-    document.head.appendChild(s);
-})();
+// Sidebar navigation does not need a second event system. The native navigation
+// buttons rendered by app.js use their own single onclick handler. Keeping a
+// second global click/capture layer here caused competing handlers and made the
+// first click unreliable.

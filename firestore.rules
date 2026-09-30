@@ -1,16 +1,10 @@
 rules_version = '2';
-
-// =====================================================================
-// AULIA APOTEK & KLINIK — FIRESTORE SECURITY RULES
-// =====================================================================
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
     function userExists() { return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
     function getUserData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function hasRole(roleList) {
-      return isSignedIn() && (!userExists() || (getUserData().get('status', 'aktif') != 'nonaktif' && getUserData().get('role', 'keuangan') in roleList));
-    }
+    function hasRole(roleList) { return isSignedIn() && (!userExists() || (getUserData().get('status', 'aktif') != 'nonaktif' && getUserData().get('role', 'keuangan') in roleList)); }
     function isActive() { return isSignedIn() && (!userExists() || getUserData().get('status', 'aktif') != 'nonaktif'); }
     function isAdminKeuangan() { return hasRole(['admin', 'keuangan']); }
     function isAdminKeuanganPSA() { return hasRole(['admin', 'keuangan', 'psa']); }
@@ -25,48 +19,19 @@ service cloud.firestore {
       allow update: if isAdminKeuangan() || (request.auth.uid == uid && unchanged('role') && unchanged('status'));
       allow delete: if isAdminKeuangan() && request.auth.uid != uid;
     }
-    match /obat/{obatId} {
-      allow read: if isSignedIn();
-      allow create, update: if isApotekStaff() && request.resource.data.stok is number && request.resource.data.stok >= 0;
-      allow delete: if isAdminKeuanganPSA();
-    }
-    match /transaksi/{trxId} {
-      allow read: if isApotekStaff() || isKlinikStaff();
-      allow create: if isApotekStaff() || isDokter();
-      allow update, delete: if isAdminKeuanganPSA();
-    }
-    match /pembelian/{id} {
-      allow read, create: if isApotekStaff(); allow update, delete: if isAdminKeuanganPSA();
-    }
-    match /retur/{id} {
-      allow read, create: if isApotekStaff();
-      allow update: if isAdminKeuanganPSA() || (isApotekStaff() && resource.data.status == 'pending' && request.resource.data.status == 'pending');
-      allow delete: if isAdminKeuanganPSA();
-    }
-    match /stockOpnameRequests/{id} {
-      allow read, create: if isApotekStaff(); allow update, delete: if isAdminKeuanganPSA();
-    }
-    match /stockOpnameHistory/{id} {
-      allow read: if isApotekStaff(); allow create: if isAdminKeuanganPSA(); allow update, delete: if false;
-    }
-    match /pasien/{id} {
-      allow read: if isKlinikStaff() || isApotekStaff(); allow create, update: if isKlinikStaff(); allow delete: if isAdminKeuanganPSA();
-    }
-    match /rekamMedis/{id} {
-      allow read: if isKlinikStaff() || isApotekStaff();
-      allow create, update: if isDokter() || isAdminKeuanganPSA();
-      allow update: if isApotekStaff() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statusResep']);
-      allow delete: if isAdminKeuanganPSA();
-    }
-    match /antrian/{id} {
-      allow read: if isKlinikStaff() || isApotekStaff(); allow create, update: if isKlinikStaff(); allow delete: if isAdminKeuanganPSA();
-    }
-    match /karyawan/{id} {
-      allow read: if isAnyStaff(); allow create, update, delete: if hasRole(['keuangan', 'psa']);
-    }
+    match /obat/{obatId} { allow read: if isSignedIn(); allow create, update: if isApotekStaff() && request.resource.data.stok is number && request.resource.data.stok >= 0; allow delete: if isAdminKeuanganPSA(); }
+    match /transaksi/{trxId} { allow read: if isApotekStaff() || isKlinikStaff(); allow create: if isApotekStaff() || isDokter(); allow update, delete: if isAdminKeuanganPSA(); }
+    match /pembelian/{id} { allow read, create: if isApotekStaff(); allow update, delete: if isAdminKeuanganPSA(); }
+    match /retur/{id} { allow read, create: if isApotekStaff(); allow update: if isAdminKeuanganPSA() || (isApotekStaff() && resource.data.status == 'pending' && request.resource.data.status == 'pending'); allow delete: if isAdminKeuanganPSA(); }
+    match /stockOpnameRequests/{id} { allow read, create: if isApotekStaff(); allow update, delete: if isAdminKeuanganPSA(); }
+    match /stockOpnameHistory/{id} { allow read: if isApotekStaff(); allow create: if isAdminKeuanganPSA(); allow update, delete: if false; }
+    match /pasien/{id} { allow read: if isKlinikStaff() || isApotekStaff(); allow create, update: if isKlinikStaff(); allow delete: if isAdminKeuanganPSA(); }
+    match /rekamMedis/{id} { allow read: if isKlinikStaff() || isApotekStaff(); allow create, update: if isDokter() || isAdminKeuanganPSA(); allow update: if isApotekStaff() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statusResep']); allow delete: if isAdminKeuanganPSA(); }
+    match /antrian/{id} { allow read: if isKlinikStaff() || isApotekStaff(); allow create, update: if isKlinikStaff(); allow delete: if isAdminKeuanganPSA(); }
+    match /karyawan/{id} { allow read: if isAnyStaff(); allow create, update, delete: if hasRole(['keuangan', 'psa']); }
 
     // ABSENSI: scan hanya Admin/PSA/Keuangan; role lain hanya membaca miliknya sendiri.
-    // PSA dan Keuangan dapat membuat/mengubah koreksi. Tidak ada check-out.
+    // PSA/Keuangan dapat membuat atau mengubah koreksi. Tidak ada check-out.
     match /absensi/{id} {
       allow read: if isAdminKeuanganPSA() || (isActive() && resource.data.userId == request.auth.uid);
       allow create: if isAdminKeuanganPSA()
@@ -76,14 +41,14 @@ service cloud.firestore {
                     && request.resource.data.karyawanId is string
                     && request.resource.data.tanggal is string;
       allow create: if hasRole(['psa', 'keuangan'])
-                    && request.resource.data.metode == 'koreksi'
-                    && request.resource.data.inputOlehUid == request.auth.uid
+                    && request.resource.data.metode == 'manual-koreksi'
+                    && request.resource.data.dikoreksiOlehUid == request.auth.uid
                     && request.resource.data.checkOut == null
                     && request.resource.data.karyawanId is string
                     && request.resource.data.tanggal is string;
       allow update: if hasRole(['psa', 'keuangan'])
-                    && request.resource.data.metode == 'koreksi'
-                    && request.resource.data.inputOlehUid == request.auth.uid
+                    && request.resource.data.metode == 'manual-koreksi'
+                    && request.resource.data.dikoreksiOlehUid == request.auth.uid
                     && request.resource.data.checkOut == null
                     && request.resource.data.karyawanId == resource.data.karyawanId
                     && request.resource.data.userId == resource.data.userId

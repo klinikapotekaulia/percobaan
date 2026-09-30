@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy to Aulia Testing'
+        required: true
+        default: 'feat/absensi-role-monthly'
+        type: string
 
 permissions:
   contents: read
@@ -14,8 +20,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout selected branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

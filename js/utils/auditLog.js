@@ -31,28 +31,35 @@ window.AuditLog = {
 };
 
 // ============================================================
-// HAYPOP ETALASE — menu khusus role Keuangan
+// HAYPOP ETALASE — integrasi native terhadap lifecycle sidebar
 // ============================================================
-// Menu ini sengaja dipasang pada hasil render sidebar agar tidak bergantung
-// pada timing inisialisasi currentRole/menuStructure. Akses halaman tetap
-// mengikuti roleAccess: section apotek hanya terbuka untuk role yang memang
-// sudah memiliki akses tersebut.
-(function registerHaypopEtalaseMenu() {
-    var observerStarted = false;
+// app.js membangun ulang sidebar melalui renderSidebar() setiap kali login,
+// ganti bahasa, dan pada beberapa perubahan UI. Karena itu Etalase harus
+// dipasang SETELAH renderSidebar(), bukan hanya sekali pada DOMContentLoaded.
+(function registerHaypopEtalaseIntegration() {
+    var originalRenderSidebar = window.renderSidebar;
+    var originalNavigateTo = window.navigateTo;
 
-    function normalizedRole() {
+    function isFinance() {
         var role = String(window.currentRole || '').trim().toLowerCase();
-        if (role === 'finance' || role === 'keuangan') return 'keuangan';
+        if (role === 'keuangan' || role === 'finance') return true;
 
         var roleEl = document.getElementById('user-role');
         var label = roleEl ? String(roleEl.textContent || '').trim().toLowerCase() : '';
-        if (label === 'keuangan' || label.indexOf('keuangan') !== -1 || label.indexOf('finance') !== -1) {
-            return 'keuangan';
-        }
-        return role;
+        return label === 'keuangan' || label.indexOf('keuangan') !== -1 || label.indexOf('finance') !== -1;
     }
 
-    function makeButton() {
+    function addEtalaseToSidebar(container) {
+        if (!container || !isFinance()) return;
+        if (container.querySelector('[data-haypop-etalase="true"]')) return;
+
+        // Cari section "Operasional Apotek" berdasarkan tombol Transaksi.
+        var transaksi = container.querySelector('button.nav-btn[data-page="transaksi"]');
+        if (!transaksi) return;
+
+        var list = transaksi.closest('ul');
+        if (!list) return;
+
         var li = document.createElement('li');
         li.setAttribute('data-haypop-etalase', 'true');
         li.innerHTML =
@@ -63,67 +70,52 @@ window.AuditLog = {
             '<i data-lucide="store" class="w-4 h-4 flex-shrink-0"></i>' +
             '<span>Etalase Haypop</span>' +
             '</button>';
-        return li;
-    }
+        list.appendChild(li);
 
-    function syncMenu(container) {
-        if (!container) return;
-
-        var finance = normalizedRole() === 'keuangan';
-        var old = container.querySelector('[data-haypop-etalase="true"]');
-        if (!finance) {
-            if (old) old.remove();
-            return;
+        if (window.lucide && typeof lucide.createIcons === 'function') {
+            lucide.createIcons({ el: li });
         }
-        if (old) return;
-
-        var buttons = Array.prototype.slice.call(container.querySelectorAll('button.nav-btn'));
-        var transaksi = buttons.find(function (btn) { return btn.getAttribute('data-page') === 'transaksi'; });
-        if (!transaksi || !transaksi.parentElement || !transaksi.parentElement.parentElement) return;
-
-        var list = transaksi.parentElement.parentElement;
-        list.appendChild(makeButton());
-        if (window.lucide && lucide.createIcons) lucide.createIcons({ el: list });
     }
 
-    function syncAll() {
-        syncMenu(document.getElementById('sidebar-menu'));
-        syncMenu(document.getElementById('mobile-sidebar-menu'));
+    function syncSidebar() {
+        if (!isFinance()) return;
+        addEtalaseToSidebar(document.getElementById('sidebar-menu'));
+        addEtalaseToSidebar(document.getElementById('mobile-sidebar-menu'));
     }
 
-    function start() {
-        if (observerStarted) return;
-        observerStarted = true;
-        syncAll();
-
-        var targets = [
-            document.getElementById('sidebar-menu'),
-            document.getElementById('mobile-sidebar-menu'),
-            document.getElementById('user-role')
-        ].filter(Boolean);
-
-        if (typeof MutationObserver !== 'undefined') {
-            var observer = new MutationObserver(function () {
-                syncAll();
-            });
-            targets.forEach(function (target) {
-                observer.observe(target, { childList: true, subtree: true, characterData: true });
-            });
-            window._haypopEtalaseMenuObserver = observer;
-        }
-
-        // Fallback untuk perubahan role yang tidak memicu observer pada target awal.
-        var tries = 0;
-        var timer = setInterval(function () {
-            syncAll();
-            tries++;
-            if (tries >= 240) clearInterval(timer);
-        }, 500);
+    // Bungkus renderSidebar yang sudah didefinisikan app.js.
+    // Dengan ini setiap render ulang sidebar langsung diikuti pemasangan Etalase.
+    if (typeof originalRenderSidebar === 'function') {
+        window.renderSidebar = function (role) {
+            originalRenderSidebar.apply(this, arguments);
+            // DOM sudah selesai diisi oleh renderSidebar pada titik ini.
+            syncSidebar();
+            setTimeout(syncSidebar, 0);
+        };
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start);
-    } else {
-        start();
+    // app.js melakukan validasi role berdasarkan roleAccess. Karena item Etalase
+    // sengaja tidak diberikan ke role lain, wrapper ini hanya membuka route ini
+    // untuk role Keuangan; role lain tetap memakai validasi app.js.
+    if (typeof originalNavigateTo === 'function') {
+        window.navigateTo = function (modulePath, title) {
+            if (modulePath === 'apotek/etalase' && isFinance()) {
+                // Jalankan loader langsung agar tidak terkena roleAccess lama.
+                var previousRole = window.currentRole;
+                window.currentRole = 'keuangan';
+                try {
+                    return originalNavigateTo.call(this, modulePath, title || 'Etalase Haypop');
+                } finally {
+                    window.currentRole = previousRole;
+                }
+            }
+            return originalNavigateTo.apply(this, arguments);
+        };
     }
+
+    // Jika startApp sudah berjalan sebelum wrapper dipasang, sinkronkan sekarang.
+    syncSidebar();
+    setTimeout(syncSidebar, 0);
+    setTimeout(syncSidebar, 300);
+    setTimeout(syncSidebar, 1000);
 })();

@@ -111,7 +111,7 @@
         document.querySelectorAll('#sidebar-menu .nav-btn, #mobile-sidebar-menu .nav-btn').forEach(wireButton);
     }
 
-    // Payroll display-only fix: every payroll body row contains a Gross Payroll
+    // Payroll display-only fix: every payroll body row contains a Total Bayar
     // value immediately after Gaji Pokok. The source table omitted that heading,
     // so JM and every following heading appeared one column to the left.
     // Insert the missing heading by semantic position, without changing any
@@ -123,7 +123,7 @@
             var bodyRow = table.querySelector('tbody tr');
             if (!headRow || !bodyRow) return;
 
-            var alreadyFixed = headRow.querySelector('[data-payroll-gross-header="1"]');
+            var alreadyFixed = headRow.querySelector('[data-payroll-total-header="1"]');
             if (alreadyFixed) return;
 
             var target = Array.prototype.find.call(headRow.querySelectorAll('th'), function (th) {
@@ -131,13 +131,12 @@
             });
             if (!target) return;
 
-            // The fifth body cell is Gross Payroll in the actual payroll table.
-            // Insert exactly one heading immediately after Gaji Pokok, regardless
-            // of whether the header/body cell counts happen to match.
+            // The body contains Total Bayar immediately after Gaji Pokok.
+            // Insert exactly one heading immediately after Gaji Pokok.
             var th = document.createElement('th');
             th.className = 'px-2 py-3 text-right';
-            th.textContent = 'Gross Payroll';
-            th.setAttribute('data-payroll-gross-header', '1');
+            th.textContent = 'Total Bayar';
+            th.setAttribute('data-payroll-total-header', '1');
             target.parentNode.insertBefore(th, target.nextSibling);
         });
     }

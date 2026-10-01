@@ -861,6 +861,7 @@ window.AppKeuanganPayroll = {
         html += '<th class="px-2 py-3 text-left">Periode</th>';
         html += '<th class="px-2 py-3 text-center">Hadir</th>';
         html += '<th class="px-2 py-3 text-right">Gaji Pokok</th>';
+        html += '<th class="px-2 py-3 text-right">Total Bayar</th>';
         html += '<th class="px-2 py-3 text-right">JM</th>';
         html += '<th class="px-2 py-3 text-right">JD</th>';
         html += '<th class="px-2 py-3 text-right">Jasa Resep Luar</th>';

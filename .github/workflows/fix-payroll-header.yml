@@ -1,0 +1,43 @@
+name: Fix Payroll Header Alignment
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch payroll header
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('js/keuangan/payroll.js')
+          s = p.read_text(encoding='utf-8')
+          old = '''html += '<th class="px-2 py-3 text-right">Gaji Pokok</th>';\n        html += '<th class="px-2 py-3 text-right">JM</th>';'''
+          new = '''html += '<th class="px-2 py-3 text-right">Gaji Pokok</th>';\n        html += '<th class="px-2 py-3 text-right">Total Bayar</th>';\n        html += '<th class="px-2 py-3 text-right">JM</th>';'''
+          if 'Total Bayar</th>' not in s:
+              if old not in s:
+                  raise SystemExit('Target header pattern not found; no changes made.')
+              p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+      - name: Remove temporary workflow
+        run: rm -f .github/workflows/fix-payroll-header.yml
+
+      - name: Commit and push
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add js/keuangan/payroll.js .github/workflows/fix-payroll-header.yml
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Fix Payroll Total Bayar header alignment'
+          git push

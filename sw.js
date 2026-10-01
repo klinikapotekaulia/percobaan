@@ -1,8 +1,9 @@
 /**
  * sw.js — Service Worker Aulia Apotek Klinik
  * Strategi: Cache shell statis, skip Firebase/CDN dynamic calls.
+ * CACHE_NAME dinaikkan agar perubahan file aplikasi tidak tertahan cache lama.
  */
-var CACHE_NAME = 'aulia-v2.8';
+var CACHE_NAME = 'aulia-v2.9';
 var SHELL_URLS = ['./','./index.html','./display.html','./manifest.json','./css/style.css','./css/tailwind.css','./css/win98.css','./icon-192.png','./icon-512.png','./logostruk.png','./js/app.js','./js/auth.js','./js/dashboard.js'];
 
 self.addEventListener('install', function (event) {

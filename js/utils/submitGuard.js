@@ -96,15 +96,20 @@ window.SubmitGuard = {
  *
  * The application is a single-page app, so a browser refresh rebuilds index.html
  * and normally starts from Dashboard. Store the module/title when the user
- * navigates, then restore that module after Firebase Auth has identified the
- * signed-in user. This is navigation-only: it does not touch Firestore data,
- * payroll values, permissions, or any business logic.
+ * navigates, then restore that module AFTER startApp() has finished establishing
+ * the authenticated role and rendering the sidebar. This timing is important:
+ * restoring too early makes navigateTo() see the fallback role and then
+ * startApp() immediately overwrites the restored page with Dashboard.
+ *
+ * This is navigation-only: it does not touch Firestore data, payroll values,
+ * permissions, or any business logic.
  */
 (function () {
     'use strict';
 
-    var STORAGE_KEY = 'aulia_last_route_v1';
+    var STORAGE_KEY = 'aulia_last_route_v2';
     var restored = false;
+    var restoreTimer = null;
 
     function getRouteFromButton(button) {
         if (!button) return null;
@@ -122,7 +127,7 @@ window.SubmitGuard = {
     }
 
     function saveRoute(route) {
-        if (!route || !route.modulePath) return;
+        if (!route || !route.modulePath || route.modulePath === 'dashboard') return;
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(route));
         } catch (e) {
@@ -155,16 +160,40 @@ window.SubmitGuard = {
         var route = readRoute();
         if (!route || !route.modulePath || typeof window.navigateTo !== 'function') return;
 
+        // startApp() is responsible for setting currentRole, rendering the sidebar,
+        // and initially navigating to Dashboard. Wait until that startup sequence
+        // has completed, then restore the actual last page.
+        if (!window.currentRole || !document.querySelector('#sidebar-menu .nav-btn')) {
+            if (!restoreTimer) {
+                restoreTimer = setTimeout(function () {
+                    restoreTimer = null;
+                    restoreLastRoute();
+                }, 300);
+            }
+            return;
+        }
+
         restored = true;
-        // Beri waktu singkat agar auth.js selesai menetapkan role dan sidebar.
         setTimeout(function () {
             try {
+                // Verify the saved route is still present in this role's sidebar.
+                // If it is not allowed/available, leave the user on Dashboard.
+                var buttons = document.querySelectorAll('#sidebar-menu .nav-btn, #mobile-sidebar-menu .nav-btn');
+                var routeExists = false;
+                buttons.forEach(function (button) {
+                    var r = getRouteFromButton(button);
+                    if (r && r.modulePath === route.modulePath) routeExists = true;
+                });
+                if (!routeExists) {
+                    restored = false;
+                    return;
+                }
                 window.navigateTo(route.modulePath, route.title || '');
             } catch (e) {
                 console.warn('[RoutePersistence] Gagal memulihkan halaman:', e);
                 restored = false;
             }
-        }, 250);
+        }, 150);
     }
 
     function install() {
@@ -179,8 +208,8 @@ window.SubmitGuard = {
         // Juga simpan halaman aktif jika user menekan F5/Ctrl+R atau menutup tab.
         window.addEventListener('beforeunload', saveActiveSidebarRoute);
 
-        // Restore setelah user terautentikasi. Jika auth.js sudah lebih dulu
-        // selesai, currentUser langsung tersedia dan pemulihan dapat dijalankan.
+        // Auth callback hanya menjadi pemicu awal. restoreLastRoute() sendiri
+        // menunggu sampai startApp() selesai menetapkan role dan sidebar.
         if (window.auth && typeof window.auth.onAuthStateChanged === 'function') {
             window.auth.onAuthStateChanged(function (user) {
                 if (user) restoreLastRoute();

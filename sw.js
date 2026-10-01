@@ -1,9 +1,9 @@
 /**
  * sw.js — Service Worker Aulia Apotek Klinik
  * Strategi: Cache shell statis, skip Firebase/CDN dynamic calls.
- * CACHE_NAME dinaikkan agar perubahan file aplikasi tidak tertahan cache lama.
+ * Dynamic JavaScript menggunakan network-first agar update modul langsung terlihat.
  */
-var CACHE_NAME = 'aulia-v2.9';
+var CACHE_NAME = 'aulia-v2.10';
 var SHELL_URLS = ['./','./index.html','./display.html','./manifest.json','./css/style.css','./css/tailwind.css','./css/win98.css','./icon-192.png','./icon-512.png','./logostruk.png','./js/app.js','./js/auth.js','./js/dashboard.js'];
 
 self.addEventListener('install', function (event) {
@@ -26,8 +26,25 @@ self.addEventListener('fetch', function (event) {
     var bypassHosts = ['firestore.googleapis.com','identitytoolkit.googleapis.com','securetoken.googleapis.com','googleapis.com','cdn.tailwindcss.com','cdn.jsdelivr.net','cdn.sheetjs.com','cdnjs.cloudflare.com','unpkg.com','gstatic.com'];
     for (var i = 0; i < bypassHosts.length; i++) if (url.hostname.indexOf(bypassHosts[i]) !== -1) return;
 
+    var isSameOrigin = url.origin === self.location.origin;
+    var isJavaScript = /\.js$/i.test(url.pathname);
+
     event.respondWith(caches.open(CACHE_NAME).then(function (cache) {
         return cache.match(event.request).then(function (cached) {
+            // JavaScript modul adalah aset yang sering berubah. Ambil versi
+            // terbaru dari server terlebih dahulu, lalu gunakan cache hanya
+            // sebagai fallback ketika jaringan gagal.
+            if (isSameOrigin && isJavaScript) {
+                return fetch(event.request).then(function (response) {
+                    if (response && response.status === 200 && (response.type === 'basic' || response.type === 'cors')) {
+                        cache.put(event.request, response.clone());
+                    }
+                    return response;
+                }).catch(function () {
+                    return cached || fetch(event.request);
+                });
+            }
+
             var fetchPromise = fetch(event.request).then(function (response) {
                 if (response && response.status === 200 && (response.type === 'basic' || response.type === 'cors')) {
                     var contentType = response.headers.get('content-type') || '';

@@ -111,34 +111,35 @@
         document.querySelectorAll('#sidebar-menu .nav-btn, #mobile-sidebar-menu .nav-btn').forEach(wireButton);
     }
 
-    // Payroll display-only fix: the payroll row contains a Gross Payroll value,
-    // but older markup did not render its corresponding table heading. That
-    // shifted every heading after Gaji Pokok one column to the left. Insert the
-    // missing heading after Gaji Pokok without touching any calculation/value.
+    // Payroll display-only fix: every payroll body row contains a Gross Payroll
+    // value immediately after Gaji Pokok. The source table omitted that heading,
+    // so JM and every following heading appeared one column to the left.
+    // Insert the missing heading by semantic position, without changing any
+    // payroll value, calculation, formula, or data.
     function fixPayrollTableHeader() {
-        var table = document.querySelector('#payroll-content table');
-        if (!table) return;
-        var headRow = table.querySelector('thead tr');
-        var bodyRow = table.querySelector('tbody tr');
-        if (!headRow || !bodyRow) return;
+        var tables = document.querySelectorAll('#payroll-content table');
+        tables.forEach(function (table) {
+            var headRow = table.querySelector('thead tr');
+            var bodyRow = table.querySelector('tbody tr');
+            if (!headRow || !bodyRow) return;
 
-        var headers = headRow.querySelectorAll('th');
-        var cells = bodyRow.querySelectorAll('td');
-        if (headers.length >= cells.length) return;
+            var alreadyFixed = headRow.querySelector('[data-payroll-gross-header="1"]');
+            if (alreadyFixed) return;
 
-        var alreadyFixed = headRow.querySelector('[data-payroll-gross-header="1"]');
-        if (alreadyFixed) return;
+            var target = Array.prototype.find.call(headRow.querySelectorAll('th'), function (th) {
+                return (th.textContent || '').trim().toLowerCase() === 'gaji pokok';
+            });
+            if (!target) return;
 
-        var target = Array.prototype.find.call(headers, function (th) {
-            return (th.textContent || '').trim().toLowerCase() === 'gaji pokok';
+            // The fifth body cell is Gross Payroll in the actual payroll table.
+            // Insert exactly one heading immediately after Gaji Pokok, regardless
+            // of whether the header/body cell counts happen to match.
+            var th = document.createElement('th');
+            th.className = 'px-2 py-3 text-right';
+            th.textContent = 'Gross Payroll';
+            th.setAttribute('data-payroll-gross-header', '1');
+            target.parentNode.insertBefore(th, target.nextSibling);
         });
-        if (!target) return;
-
-        var th = document.createElement('th');
-        th.className = 'px-2 py-3 text-right';
-        th.textContent = 'Gross Payroll';
-        th.setAttribute('data-payroll-gross-header', '1');
-        target.parentNode.insertBefore(th, target.nextSibling);
     }
 
     function install() {

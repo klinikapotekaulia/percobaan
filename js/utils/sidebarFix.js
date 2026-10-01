@@ -111,13 +111,45 @@
         document.querySelectorAll('#sidebar-menu .nav-btn, #mobile-sidebar-menu .nav-btn').forEach(wireButton);
     }
 
+    // Payroll display-only fix: the payroll row contains a Gross Payroll value,
+    // but older markup did not render its corresponding table heading. That
+    // shifted every heading after Gaji Pokok one column to the left. Insert the
+    // missing heading after Gaji Pokok without touching any calculation/value.
+    function fixPayrollTableHeader() {
+        var table = document.querySelector('#payroll-content table');
+        if (!table) return;
+        var headRow = table.querySelector('thead tr');
+        var bodyRow = table.querySelector('tbody tr');
+        if (!headRow || !bodyRow) return;
+
+        var headers = headRow.querySelectorAll('th');
+        var cells = bodyRow.querySelectorAll('td');
+        if (headers.length >= cells.length) return;
+
+        var alreadyFixed = headRow.querySelector('[data-payroll-gross-header="1"]');
+        if (alreadyFixed) return;
+
+        var target = Array.prototype.find.call(headers, function (th) {
+            return (th.textContent || '').trim().toLowerCase() === 'gaji pokok';
+        });
+        if (!target) return;
+
+        var th = document.createElement('th');
+        th.className = 'px-2 py-3 text-right';
+        th.textContent = 'Gross Payroll';
+        th.setAttribute('data-payroll-gross-header', '1');
+        target.parentNode.insertBefore(th, target.nextSibling);
+    }
+
     function install() {
         installStableSidebarStyle();
         wireAll();
+        fixPayrollTableHeader();
 
         if (!window[OBSERVER_ID]) {
             var observer = new MutationObserver(function () {
                 wireAll();
+                fixPayrollTableHeader();
             });
             observer.observe(document.body, { childList: true, subtree: true });
             window[OBSERVER_ID] = observer;
